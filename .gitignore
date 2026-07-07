@@ -1,0 +1,47 @@
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# Data files generated locally
+data/raw/
+data/cache/
+
+# Optional: ignore processed data if it can be regenerated
+# data/processed/
+
+# Generated reports, charts, PDFs
+outputs/
+reports/
+*.pdf
+
+# Test and coverage files
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# IDE/editor files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

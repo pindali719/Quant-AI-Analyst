@@ -63,9 +63,9 @@ def to_percentage(series: pd.Series) -> pd.Series:
     Example:
     0.45 becomes 45.0
     """
-    series = to_year_series(series)
+    series = series.dropna().copy()
+    series = series.sort_index()
 
-    # If values are already like 45, do not multiply again.
     if series.abs().max() <= 1.5:
         series = series * 100
 
@@ -133,7 +133,7 @@ def plot_free_cash_flow(cash_flow: pd.DataFrame, ticker: str) -> str:
     return str(file_path)
 
 
-def generate_all_charts(income_statement: pd.DataFrame, cash_flow: pd.DataFrame, metrics: pd.DataFrame, ticker: str) -> dict:
+def generate_all_charts(income_statement: pd.DataFrame, cash_flow: pd.DataFrame, metrics: pd.DataFrame, ticker: str, historical_prices: pd.DataFrame) -> dict:
     """Generate all charts and return file paths."""
 
     revenue_chart = plot_revenue(income_statement, ticker)
