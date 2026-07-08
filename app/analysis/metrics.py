@@ -7,13 +7,11 @@ def calculate_revenue_growth(income_statement: pd.DataFrame) -> pd.Series:
     #Sort index, so pct_change computes the change over years correctly
     revenue=revenue.sort_index()
 
-    revenue_growths=revenue.pct_change()*100
+    revenue_growths=revenue.pct_change()
 
     #Invert the indexes back to "Higher to Lower", to follow the format of the other DataFrames.
     revenue_growths = revenue_growths.iloc[::-1]
 
-
-    print(revenue_growths)
     return revenue_growths
 
 def calculate_gross_margin(income_statement: pd.DataFrame) -> pd.Series:
@@ -70,7 +68,7 @@ def calculate_fcf_margin(cash_flow: pd.DataFrame, income_statement: pd.DataFrame
     fcf_margins=[]
 
     for col in cash_flow.columns:
-        free_cash_flow=cash_flow[col]["OperatingCashFlow"]-cash_flow[col]["CapitalExpenditure"]
+        free_cash_flow=cash_flow[col]["OperatingCashFlow"]+cash_flow[col]["CapitalExpenditure"]
 
         fcf_margin=free_cash_flow/income_statement[col]["TotalRevenue"]
 
@@ -119,8 +117,6 @@ def calculate_all_metrics(income_statement: pd.DataFrame, cash_flow: pd.DataFram
 
     all_metrics.index.name = "metric"
     all_metrics.columns.name = "year"
-
-    print(all_metrics)
 
 
     return  all_metrics
