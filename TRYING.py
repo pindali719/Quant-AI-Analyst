@@ -6,7 +6,14 @@ import app.analysis.metrics as metrics
 ticker=yf.Ticker("NVDA")
 
 
-income_statement= (ticker.get_income_stmt(freq="yearly")).loc[["TotalRevenue", "GrossProfit", "OperatingIncome", "NetIncome"]]
+fields=["longBusinessSummary", "sector", "industry", "marketCap", "exchange", "currency", ""]
+
+info = ticker.get_info()
 
 
-print(income_statement)
+
+
+print(info.keys())
+
+
+

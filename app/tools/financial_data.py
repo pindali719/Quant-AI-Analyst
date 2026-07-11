@@ -37,13 +37,14 @@ def fetch_company_info(tickets: str) -> dict:
 
     ticker= yf.Ticker(tickets)
 
-    fields=["longBusinessSummary", "sector", "industry", "marketCap", "exchange", "currency"]
+    fields=["longBusinessSummary", "sector", "industry", "marketCap", "exchange", "currency", "currentPrice", "enterpriseValue", "sharesOutstanding"]
 
+    info = ticker.get_info()
 
     selected_info={}
 
     for field in fields:
-        selected_info[field] = ticker.get_info()[field]
+        selected_info[field] = info.get(field)
 
     return selected_info
 

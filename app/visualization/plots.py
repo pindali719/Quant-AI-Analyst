@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
+
 CHARTS_DIR = Path("outputs/charts")
 
 #Create outputs/charts folder if it does not exist.
@@ -133,16 +134,71 @@ def plot_free_cash_flow(cash_flow: pd.DataFrame, ticker: str) -> str:
     return str(file_path)
 
 
-def generate_all_charts(income_statement: pd.DataFrame, cash_flow: pd.DataFrame, metrics: pd.DataFrame, ticker: str, historical_prices: pd.DataFrame) -> dict:
+def plot_dcf_sensitivity(sensitivity_table: pd.DataFrame, ticker: str) -> str:
+    """
+    Create a heatmap-style plot for the DCF sensitivity table.
+
+    Rows = discount rates
+    Columns = terminal growth rates
+    Values = fair value per share
+    """
+    ensure_charts_dir()
+
+    numeric_table = sensitivity_table.apply(pd.to_numeric, errors="coerce")
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    image = ax.imshow(numeric_table.values)
+
+    ax.set_title("DCF Sensitivity: Fair Value per Share")
+    ax.set_xlabel("Terminal Growth Rate")
+    ax.set_ylabel("Discount Rate")
+
+    ax.set_xticks(range(len(numeric_table.columns)))
+    ax.set_xticklabels(numeric_table.columns)
+
+    ax.set_yticks(range(len(numeric_table.index)))
+    ax.set_yticklabels(numeric_table.index)
+
+    for row_index in range(len(numeric_table.index)):
+        for column_index in range(len(numeric_table.columns)):
+            value = numeric_table.iloc[row_index, column_index]
+
+            if pd.isna(value):
+                text = "N/A"
+            else:
+                text = f"{value:.2f}"
+
+            ax.text(
+                column_index,
+                row_index,
+                text,
+                ha="center",
+                va="center",
+            )
+
+    fig.colorbar(image, ax=ax, label="Fair Value per Share")
+
+    fig.tight_layout()
+    file_path = CHARTS_DIR / f"{ticker}_dcf_sensitivity.png"
+    fig.savefig(file_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    return str(file_path)
+
+
+def generate_all_charts(income_statement: pd.DataFrame, cash_flow: pd.DataFrame, metrics: pd.DataFrame, ticker: str, historical_prices: pd.DataFrame, sensitivity_table: pd.DataFrame) -> dict:
     """Generate all charts and return file paths."""
 
     revenue_chart = plot_revenue(income_statement, ticker)
     margins_chart = plot_margins(metrics, ticker)
     free_cash_flow_chart = plot_free_cash_flow(cash_flow, ticker)
+    dcf_sensitivity_heatmap = plot_dcf_sensitivity(sensitivity_table=sensitivity_table, ticker= ticker)
 
     return {
         "revenue_chart": revenue_chart,
         "margins_chart": margins_chart,
-        "free_cash_flow_chart": free_cash_flow_chart
+        "free_cash_flow_chart": free_cash_flow_chart,
+        "dcf_sensitivity_heatmap": dcf_sensitivity_heatmap
     }
 

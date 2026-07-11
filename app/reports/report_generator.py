@@ -15,6 +15,15 @@ def format_number(value):
     return str(value)
 
 
+def format_percentage(value):
+    """Format decimal values as percentages."""
+
+    if value is None:
+        return "N/A"
+
+    return f"{value:.1%}"
+
+
 def dataframe_to_markdown(df: pd.DataFrame) -> str:
     """
     Convert a DataFrame into a basic markdown table without extra dependencies.
@@ -35,6 +44,114 @@ def dataframe_to_markdown(df: pd.DataFrame) -> str:
         body_rows.append(body_row)
 
     return "\n".join([header_row, separator_row] + body_rows)
+
+def make_dcf_assumptions_text(assumptions: dict) -> str:
+    """
+    Build the DCF assumptions subsection.
+    """
+
+    lines = []
+
+    lines.append("### DCF Assumptions")
+    lines.append("")
+    lines.append(f"- **Discount rate:** {format_percentage(assumptions.get('discount_rate'))}")
+    lines.append(f"- **Terminal growth rate:** {format_percentage(assumptions.get('terminal_growth'))}")
+    lines.append(f"- **FCF margin:** {format_percentage(assumptions.get('fcf_margin'))}")
+
+    growth_rates = assumptions.get("growth_rates")
+
+    if growth_rates is not None:
+        formatted_growth_rates = []
+
+        for growth_rate in growth_rates:
+            formatted_growth_rates.append(format_percentage(growth_rate))
+
+        lines.append(f"- **Revenue growth assumptions:** {', '.join(formatted_growth_rates)}")
+
+    return "\n".join(lines)
+
+
+def make_projected_fcf_text(projected_fcf: list) -> str:
+    """
+    Build the projected free cash flow subsection.
+    """
+
+    if projected_fcf is None:
+        return ""
+
+    lines = []
+
+    lines.append("### Projected Free Cash Flow")
+    lines.append("")
+
+    for year_number, fcf in enumerate(projected_fcf, start=1):
+        lines.append(f"- **Year {year_number}:** {format_number(fcf)}")
+
+    return "\n".join(lines)
+
+
+def make_dcf_sensitivity_text(sensitivity_table) -> str:
+    """
+    Build the DCF sensitivity table subsection.
+    """
+
+    if sensitivity_table is None:
+        return ""
+
+    lines = []
+
+    lines.append("### DCF Sensitivity Table")
+    lines.append("")
+    lines.append(dataframe_to_markdown(sensitivity_table))
+
+    return "\n".join(lines)
+
+
+def make_dcf_section(dcf_result: dict) -> str:
+    """
+    Build the DCF Analysis section.
+
+    This section only presents calculated DCF data.
+    Later, the AI agent can replace or extend this with written interpretation.
+    """
+
+    if dcf_result is None:
+        return "DCF analysis was not included in this report."
+
+    lines = []
+
+    fair_value_per_share = dcf_result.get("fair_value_per_share")
+    enterprise_value = dcf_result.get("enterprise_value")
+    equity_value = dcf_result.get("equity_value")
+    assumptions = dcf_result.get("assumptions", {})
+    projected_fcf = dcf_result.get("projected_fcf")
+    sensitivity_table = dcf_result.get("sensitivity_table")
+
+
+
+    lines.append("### DCF Valuation Output")
+    lines.append("")
+    lines.append(f"- **Estimated fair value per share:** {format_number(fair_value_per_share)}")
+    lines.append(f"- **Enterprise value:** {format_number(enterprise_value)}")
+    lines.append(f"- **Equity value:** {format_number(equity_value)}")
+    lines.append("")
+
+    lines.append(make_dcf_assumptions_text(assumptions))
+    lines.append("")
+
+    projected_fcf_text = make_projected_fcf_text(projected_fcf)
+
+    if projected_fcf_text != "":
+        lines.append(projected_fcf_text)
+        lines.append("")
+
+    sensitivity_text = make_dcf_sensitivity_text(sensitivity_table)
+
+    if sensitivity_text != "":
+        lines.append(sensitivity_text)
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 def make_preliminary_recommendation(metrics: pd.DataFrame, valuation_metrics: dict) -> str:
@@ -57,6 +174,7 @@ def generate_markdown_report(
     metrics: pd.DataFrame,
     valuation_metrics: dict,
     chart_paths: dict,
+    dcf_result: dict
 ) -> str:
     """
     Build the markdown report as one large string.
@@ -76,7 +194,12 @@ def generate_markdown_report(
     for chart_name, chart_path in chart_paths.items():
         chart_lines.append(f"- **{chart_name}:** `{chart_path}`")
 
+    valuation_text = "\n".join(valuation_lines)
+    chart_text = "\n".join(chart_lines)
+    dcf_text = make_dcf_section(dcf_result)
+
     recommendation = make_preliminary_recommendation(metrics, valuation_metrics)
+
 
     report = f"""# {ticker} Investment Report
 
@@ -93,11 +216,15 @@ def generate_markdown_report(
 
 ## Valuation Metrics
 
-{"\n".join(valuation_lines)}
+{valuation_text}
+
+## DCF Analysis
+
+{dcf_text}
 
 ## Charts
 
-{"\n".join(chart_lines)}
+{chart_text}
 
 ## Preliminary Recommendation
 
@@ -134,7 +261,9 @@ def generate_report(
     valuation_metrics: dict,
     chart_paths: dict,
     output_path: str,
+    dcf_result: dict
 ) -> str:
+    
     """
     Main function used by main.py.
 
@@ -146,6 +275,7 @@ def generate_report(
         metrics=metrics,
         valuation_metrics=valuation_metrics,
         chart_paths=chart_paths,
+        dcf_result=dcf_result
     )
 
     saved_path = save_markdown_report(markdown_text, output_path)
