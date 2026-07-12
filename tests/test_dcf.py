@@ -37,7 +37,36 @@ def test_fair_value_per_share():
         shares_outstanding=shares_outstanding,
     )
 
+
+
+
     assert result == pytest.approx(10.0)
+
+def test_dcf_sensitivity_table_content():
+    """
+    Checks that the DCF sensitivity table calculates the correct fair value per share
+    for one discount rate and one terminal growth rate.
+    """
+
+    base_fcf = 100
+    shares_outstanding = 10
+    discount_rates = [0.10]
+    terminal_growth_rates = [0.03]
+
+    result = dcf.create_dcf_sensitivity_table(
+        base_fcf=base_fcf,
+        shares_outstanding=shares_outstanding,
+        discount_rates=discount_rates,
+        terminal_growth_rates=terminal_growth_rates,
+    )
+
+    expected_fair_value_per_share = 160.1875725701796
+
+    assert result.loc["10.0%", "3.0%"] == pytest.approx(expected_fair_value_per_share)
+
+
+
+
 
 
 def test_dcf_sensitivity_table_shape():

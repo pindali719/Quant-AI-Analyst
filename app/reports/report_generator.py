@@ -71,7 +71,7 @@ def make_dcf_assumptions_text(assumptions: dict) -> str:
     return "\n".join(lines)
 
 
-def make_projected_fcf_text(projected_fcf: list) -> str:
+def make_projected_fcf_text(projected_fcf: list, currency: str) -> str:
     """
     Build the projected free cash flow subsection.
     """
@@ -81,7 +81,7 @@ def make_projected_fcf_text(projected_fcf: list) -> str:
 
     lines = []
 
-    lines.append("### Projected Free Cash Flow")
+    lines.append(f"### Projected Free Cash Flow ({currency})")
     lines.append("")
 
     for year_number, fcf in enumerate(projected_fcf, start=1):
@@ -107,7 +107,7 @@ def make_dcf_sensitivity_text(sensitivity_table) -> str:
     return "\n".join(lines)
 
 
-def make_dcf_section(dcf_result: dict) -> str:
+def make_dcf_section(dcf_result: dict, currency: str) -> str:
     """
     Build the DCF Analysis section.
 
@@ -129,7 +129,7 @@ def make_dcf_section(dcf_result: dict) -> str:
 
 
 
-    lines.append("### DCF Valuation Output")
+    lines.append(f"### DCF Valuation Output ({currency})")
     lines.append("")
     lines.append(f"- **Estimated fair value per share:** {format_number(fair_value_per_share)}")
     lines.append(f"- **Enterprise value:** {format_number(enterprise_value)}")
@@ -139,7 +139,7 @@ def make_dcf_section(dcf_result: dict) -> str:
     lines.append(make_dcf_assumptions_text(assumptions))
     lines.append("")
 
-    projected_fcf_text = make_projected_fcf_text(projected_fcf)
+    projected_fcf_text = make_projected_fcf_text(projected_fcf= projected_fcf, currency= currency)
 
     if projected_fcf_text != "":
         lines.append(projected_fcf_text)
@@ -183,8 +183,13 @@ def generate_markdown_report(
     company_name = company_info.get("longName", ticker)
     sector = company_info.get("sector", "N/A")
     industry = company_info.get("industry", "N/A")
+    currency = company_info.get("currency")
 
     financial_metrics_table = dataframe_to_markdown(metrics)
+
+    #Change the name of free_cash_flow to free_cash_flow (CURRENCY)
+
+    financial_metrics_table = financial_metrics_table.replace("free_cash_flow", f"free_cash_flow ({currency})")
 
     valuation_lines = []
     for metric_name, metric_value in valuation_metrics.items():
@@ -196,7 +201,7 @@ def generate_markdown_report(
 
     valuation_text = "\n".join(valuation_lines)
     chart_text = "\n".join(chart_lines)
-    dcf_text = make_dcf_section(dcf_result)
+    dcf_text = make_dcf_section(dcf_result = dcf_result, currency= currency)
 
     recommendation = make_preliminary_recommendation(metrics, valuation_metrics)
 

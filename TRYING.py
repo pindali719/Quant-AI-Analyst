@@ -13,7 +13,7 @@ info = ticker.get_info()
 
 
 
-print(info.keys())
+print(info.get("currency"))
 
 
 
