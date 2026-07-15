@@ -37,7 +37,7 @@ def fetch_company_info(tickets: str) -> dict:
 
     ticker= yf.Ticker(tickets)
 
-    fields=["longBusinessSummary", "sector", "industry", "marketCap", "exchange", "currency", "currentPrice", "enterpriseValue", "sharesOutstanding"]
+    fields=["longBusinessSummary", "sector", "industry", "marketCap", "exchange", "currency", "currentPrice", "enterpriseValue", "sharesOutstanding", "trailingPE"]
 
     info = ticker.get_info()
 
@@ -48,7 +48,7 @@ def fetch_company_info(tickets: str) -> dict:
 
     return selected_info
 
-def fetch_all_financial_data(ticker):
+def fetch_all_financial_data(ticker: str) -> dict:
     company_info = fetch_company_info(ticker)
     income_statement = fetch_income_statement(ticker)
     balance_sheet = fetch_balance_sheet(ticker)

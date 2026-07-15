@@ -11,9 +11,9 @@ fields=["longBusinessSummary", "sector", "industry", "marketCap", "exchange", "c
 info = ticker.get_info()
 
 
-
-
-print(info.get("currency"))
-
+if "debtToEquity" in info.keys():
+    print("yes")
+else:
+    print("no")
 
 
