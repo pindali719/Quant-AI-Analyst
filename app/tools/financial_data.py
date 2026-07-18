@@ -5,7 +5,7 @@ def fetch_income_statement(ticker: str) -> pd.DataFrame:
 
     ticker= yf.Ticker(ticker)
 
-    income_statement= (ticker.get_income_stmt(freq="yearly")).loc[["TotalRevenue", "GrossProfit", "OperatingIncome", "NetIncome"]]
+    income_statement= (ticker.get_income_stmt(freq="yearly")).loc[["TotalRevenue", "GrossProfit", "OperatingIncome", "NetIncome", "PretaxIncome", "TaxProvision"]]
 
     return income_statement
 
