@@ -1,11 +1,12 @@
 import yfinance as yf
 import pandas as pd
+from helpers import latest_value
 
 def fetch_income_statement(ticker: str) -> pd.DataFrame:
 
     ticker= yf.Ticker(ticker)
 
-    income_statement= (ticker.get_income_stmt(freq="yearly")).loc[["TotalRevenue", "GrossProfit", "OperatingIncome", "NetIncome", "PretaxIncome", "TaxProvision"]]
+    income_statement= (ticker.get_income_stmt(freq="yearly")).loc[["TotalRevenue", "GrossProfit", "OperatingIncome", "NetIncome", "PretaxIncome", "TaxProvision", "EBITDA"]]
 
     return income_statement
 
@@ -35,6 +36,7 @@ def fetch_historical_prices(tickets: str) -> pd.DataFrame:
 
 def fetch_company_info(tickets: str) -> dict:
 
+
     ticker= yf.Ticker(tickets)
 
     fields=["longBusinessSummary", "sector", "industry", "marketCap", "exchange", "currency", "currentPrice", "enterpriseValue", "sharesOutstanding", "trailingPE"]
@@ -43,8 +45,23 @@ def fetch_company_info(tickets: str) -> dict:
 
     selected_info={}
 
+    balance_sheet = fetch_balance_sheet(tickets= tickets)
+
+    market_cap = info.get("marketCap")
+    debt = latest_value(balance_sheet.loc["TotalDebt"])
+    cash = latest_value(balance_sheet.loc["CashAndCashEquivalents"])
+
+    #To get last financial year's enterprise_value, not the current. To keep consistency
+    enterprise_value = (
+    market_cap + debt - cash
+    if None not in (market_cap, debt, cash)
+    else None
+    )
+
     for field in fields:
         selected_info[field] = info.get(field)
+
+    selected_info["enterpriseValue"] = enterprise_value
 
     return selected_info
 

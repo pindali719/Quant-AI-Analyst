@@ -12,6 +12,30 @@ def get_default_peers(ticker: str) -> list[str]:
 
     return peers
 
+def calculate_ev_to_ebitda(income_statement: pd.DataFrame, balance_sheet: pd.DataFrame, market_cap: float, debt: float) -> float:
+
+    ebitda = latest_value(
+        income_statement.loc["EBITDA"]
+    )
+
+    cash = latest_value(
+        balance_sheet.loc["CashAndCashEquivalents"]
+    )
+
+    enterprise_value = (
+        market_cap + debt - cash
+        if None not in (market_cap, debt, cash)
+        else None
+    )
+
+    ev_to_ebitda = (
+        enterprise_value / ebitda
+        if enterprise_value is not None
+        and ebitda not in (None, 0)
+        else None
+)
+    return ev_to_ebitda
+
 
 def fetch_metrics(tickers: list[str]) -> pd.DataFrame:
 
@@ -19,9 +43,11 @@ def fetch_metrics(tickers: list[str]) -> pd.DataFrame:
     
     for ticker in tickers:
         try:
+
             all_financial_data = fetch_all_financial_data(ticker= ticker)
+            income_statement = all_financial_data.get("income_statement")
             metrics = calculate_all_metrics(
-                income_statement=all_financial_data.get("income_statement"),
+                income_statement= income_statement,
                 cash_flow= all_financial_data.get("cash_flow"),
                 balance_sheet= all_financial_data.get("balance_sheet"))
 
@@ -33,11 +59,35 @@ def fetch_metrics(tickers: list[str]) -> pd.DataFrame:
             gross_margin = latest_value(metrics.get("gross_margin"))
             operating_margin= latest_value(metrics.get("operating_margin"))
             net_margin = latest_value(metrics.get("net_margin"))
-            pe_ratio = peer_profile.get("trailingPE")
-            ps_ratio = peer_profile.get("priceToSalesTrailing12Months")
-            ev_to_ebitda = peer_profile.get("enterpriseToEbitda")
+
+            #get the anual pe_ratio, not from the last 12 months
+            net_income = latest_value(
+                income_statement.loc["NetIncome"]
+            )
+
+            pe_ratio = (
+                market_cap / net_income
+                if market_cap is not None
+                and net_income not in (None, 0)
+                else None
+            )
+
+            #get the anual ps_ratio, not from the las 12 months
+            revenue = latest_value(
+                income_statement.loc["TotalRevenue"]
+            )
+
+            ps_ratio = (
+                market_cap / revenue
+                if market_cap is not None
+                and revenue not in (None, 0)
+                else None
+            )
 
             debt = latest_value(balance_sheet.loc["TotalDebt"])
+
+            ev_to_ebitda = calculate_ev_to_ebitda(income_statement= income_statement, balance_sheet= balance_sheet, market_cap= market_cap, debt= debt)
+
             stockholders_equity = latest_value(balance_sheet.loc["StockholdersEquity"])
 
             #In case division by 0, or some of the terms are "None"

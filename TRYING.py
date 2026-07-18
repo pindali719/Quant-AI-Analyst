@@ -10,24 +10,10 @@ ticker=yf.Ticker("NVDA")
 
 fields=["longBusinessSummary", "sector", "industry", "marketCap", "exchange", "currency", ""]
 
-info = ticker.get_info()
+info = ticker.get_income_stmt()
 
-print(info.get("debtToEquity"))
 
-all_financial_data = fetch_all_financial_data("NVDA")
-balance_sheet = all_financial_data.get("balance_sheet")
-debt = latest_value(balance_sheet.loc["TotalDebt"])
-stockholders_equity = latest_value(balance_sheet.loc["StockholdersEquity"])
-
-debt_to_equity = debt/stockholders_equity
-
-print(debt_to_equity)
-
-sheet = ticker.get_balance_sheet()
-
-#print(sheet.index)
-
-"""if "TaxProvision" in info.keys():
+if "EBITDA" in info.index:
     print("yes")
 else:
-    print("no")"""
+    print("no")
