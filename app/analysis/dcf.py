@@ -190,6 +190,8 @@ def run_dcf(financials, market_data, assumptions) -> dict:
         terminal_growth_rates= [0.02, 0.025, 0.03, 0.035, 0.04]
     )
 
+
+
     #We only want fair_value_per_share, but the rest are important for the AI Agent to explain the results
     result ={
         "fair_value_per_share": fair_value_per_share,
@@ -246,6 +248,39 @@ def run_dcf_scenarios(financials: dict, market_data: dict) -> dict:
         )
 
     return results
+
+def enter_assumption():
+
+    while True:
+        try:
+            print("--ASSUMPTIONS--\n1.bear\n2.base\n3,bull")
+            type_of_assumption = int(input("\nWhat kind of assumption are you making?\nAnswer: "))
+            if ( (type_of_assumption < 1) or (3 < type_of_assumption)):
+                print("\nOut of range!!!")
+            else:
+                break
+
+        except:
+            print("Not valid input!!!")
+
+    return type_of_assumption
+
+def get_dcf_scenary_result(type_of_assumption: int, dcf_scenarios: dict) -> dict:
+
+    #Convert from number to its name
+    if type_of_assumption == 1:
+        type_of_assumption = "bear"
+    elif type_of_assumption == 2:
+        type_of_assumption = "base"
+    else:
+        type_of_assumption = "bull"
+
+    dcf_results= dcf_scenarios[type_of_assumption]
+
+    return dcf_results
+
+
+
 
 
 

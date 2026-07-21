@@ -136,8 +136,11 @@ def make_dcf_section(dcf_result: dict, currency: str) -> str:
     lines.append(f"- **Equity value:** {format_number(equity_value)}")
     lines.append("")
 
-    lines.append(make_dcf_assumptions_text(assumptions))
-    lines.append("")
+    dcf_assumptions_text = make_dcf_assumptions_text(assumptions)
+
+    if dcf_assumptions_text !="":
+        lines.append(dcf_assumptions_text)
+        lines.append("")
 
     projected_fcf_text = make_projected_fcf_text(projected_fcf= projected_fcf, currency= currency)
 
@@ -153,13 +156,50 @@ def make_dcf_section(dcf_result: dict, currency: str) -> str:
 
     return "\n".join(lines)
 
+def make_peer_comparison_text(comparison_with_peers: dict, ticker):
+    
+    peer_comparison_table = comparison_with_peers.get("peer_comparison_table")
+
+    #A list containing the indexes of the table (so it contains the tickers)
+    peers = peer_comparison_table.index.tolist()
+    peers = peers.remove(ticker)
+
+    summary = peer_comparison_table.get("quality_adjusted_valuation")
+
+    lines = []
+
+    lines.append(f"{ticker} is compared against {peers}.")
+    lines.append("")
+    lines.append(f"{dataframe_to_markdown(peer_comparison_table)}")
+    lines.append("")
+    lines.append(f"Summary: {summary}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+def make_scorecard_text(scorecard: dict):
+
+    lines = []
+
+    scores = scorecard.get("scores")
+    scores_df = pd.DataFrame.from_dict(scores, orient="index", columns=["score"],).rename_axis("Category")
+
+    lines.append(f"{dataframe_to_markdown(scores_df)}")
+    lines.append("")
+    lines.append(f"Overall score: {scorecard.get("overall_score")}")
+    lines.append(f"Recommendation: {scorecard.get("recommendation")}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+    
+
 
 def make_preliminary_recommendation(metrics: pd.DataFrame, valuation_metrics: dict) -> str:
     """
     Very simple rule-based recommendation.
 
     This is intentionally basic for the MVP.
-    Later, you can replace it with a scoring system.
     """
     return (
         "Preliminary view: Hold / Selective Buy.\n\n"
@@ -167,6 +207,20 @@ def make_preliminary_recommendation(metrics: pd.DataFrame, valuation_metrics: di
         "but the valuation should be reviewed carefully before making a decision."
     )
 
+def make_valuation_text(valuation_metrics: dict):
+    valuation_lines = []
+    for metric_name, metric_value in valuation_metrics.items():
+        valuation_lines.append(f"- **{metric_name}:** {format_number(metric_value)}")
+
+    return "\n".join(valuation_lines)
+
+def make_chart_text(chart_paths: dict):
+
+    chart_lines = []
+    for chart_name, chart_path in chart_paths.items():
+        chart_lines.append(f"- **{chart_name}:** `{chart_path}`")
+    
+    return "\n".join(chart_lines)
 
 def generate_markdown_report(
     ticker: str,
@@ -174,7 +228,9 @@ def generate_markdown_report(
     metrics: pd.DataFrame,
     valuation_metrics: dict,
     chart_paths: dict,
-    dcf_result: dict
+    dcf_result: dict,
+    comparison_with_peers: dict,
+    scorecard: dict
 ) -> str:
     """
     Build the markdown report as one large string.
@@ -191,17 +247,11 @@ def generate_markdown_report(
 
     financial_metrics_table = financial_metrics_table.replace("free_cash_flow", f"free_cash_flow ({currency})")
 
-    valuation_lines = []
-    for metric_name, metric_value in valuation_metrics.items():
-        valuation_lines.append(f"- **{metric_name}:** {format_number(metric_value)}")
-
-    chart_lines = []
-    for chart_name, chart_path in chart_paths.items():
-        chart_lines.append(f"- **{chart_name}:** `{chart_path}`")
-
-    valuation_text = "\n".join(valuation_lines)
-    chart_text = "\n".join(chart_lines)
+    valuation_text = make_valuation_text(valuation_metrics= valuation_metrics)
+    chart_text = make_chart_text(chart_paths= chart_paths)
     dcf_text = make_dcf_section(dcf_result = dcf_result, currency= currency)
+    peer_comparison_text = make_peer_comparison_text(comparison_with_peers= comparison_with_peers)
+    scorecard_text = make_scorecard_text(scorecard= scorecard)
 
     recommendation = make_preliminary_recommendation(metrics, valuation_metrics)
 
@@ -226,6 +276,14 @@ def generate_markdown_report(
 ## DCF Analysis
 
 {dcf_text}
+
+## Peer comparison
+
+{peer_comparison_text}
+
+## Scorecard
+
+{scorecard_text}
 
 ## Charts
 

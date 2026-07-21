@@ -12,7 +12,6 @@ def ensure_charts_dir():
     CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-
 def to_year_series(series: pd.Series) -> pd.Series:
     """
     Convert a yfinance Series indexed by dates into a Series indexed by years.
@@ -186,19 +185,88 @@ def plot_dcf_sensitivity(sensitivity_table: pd.DataFrame, ticker: str) -> str:
 
     return str(file_path)
 
+def plot_peer_valuation(peer_df: pd.DataFrame, ticker: str) -> str:
 
-def generate_all_charts(income_statement: pd.DataFrame, cash_flow: pd.DataFrame, metrics: pd.DataFrame, ticker: str, historical_prices: pd.DataFrame, sensitivity_table: pd.DataFrame) -> dict:
+    """
+    Create a peer valuation comparison chart.
+
+    The chart compares valuation multiples:
+    - P/E ratio
+    - P/S ratio
+    - EV/EBITDA
+
+    Parameters
+    ----------
+    peer_df:
+        DataFrame containing one row per company.
+        Expected index: ticker
+        Expected columns: pe_ratio, ps_ratio, ev_to_ebitda
+
+    output_path:
+        Path where the chart should be saved.
+
+    Returns
+    -------
+    str
+        Saved chart path.
+
+    """
+    ensure_charts_dir()
+
+    valuation_cols = ["pe_ratio", "ps_ratio", "ev_to_ebitda"]
+
+    missing_cols = [
+        col for col in valuation_cols
+        if col not in peer_df.columns
+    ]
+
+    if missing_cols:
+        raise ValueError(f"Missing columns in peer_df: {missing_cols}")
+
+    chart_df = peer_df[valuation_cols].copy()
+
+    chart_df = chart_df.apply(pd.to_numeric, errors="coerce")
+    chart_df = chart_df.dropna(how="all")
+
+    if chart_df.empty:
+        raise ValueError("No valuation data available to plot.")
+    
+    file_path = CHARTS_DIR / f"{ticker}_dcf_sensitivity.png"
+
+    ax = chart_df.plot(kind="bar", figsize=(10, 6))
+
+    ax.set_title("Peer Valuation Comparison")
+    ax.set_xlabel("Company")
+    ax.set_ylabel("Valuation Multiple")
+    ax.legend(["P/E", "P/S", "EV/EBITDA"])
+    ax.grid(axis="y", alpha=0.3)
+
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+
+    plt.savefig(file_path, dpi=300)
+    plt.close()
+
+    return str(file_path)
+
+
+
+
+def generate_all_charts(income_statement: pd.DataFrame, cash_flow: pd.DataFrame, metrics: pd.DataFrame, ticker: str, historical_prices: pd.DataFrame, sensitivity_table: pd.DataFrame, peer_df: pd.DataFrame) -> dict:
     """Generate all charts and return file paths."""
+
 
     revenue_chart = plot_revenue(income_statement, ticker)
     margins_chart = plot_margins(metrics, ticker)
     free_cash_flow_chart = plot_free_cash_flow(cash_flow, ticker)
     dcf_sensitivity_heatmap = plot_dcf_sensitivity(sensitivity_table=sensitivity_table, ticker= ticker)
+    peer_valuation_chart = plot_peer_valuation(peer_df=peer_df, ticker= ticker)
 
     return {
         "revenue_chart": revenue_chart,
         "margins_chart": margins_chart,
         "free_cash_flow_chart": free_cash_flow_chart,
-        "dcf_sensitivity_heatmap": dcf_sensitivity_heatmap
+        "dcf_sensitivity_heatmap": dcf_sensitivity_heatmap,
+        "peer_valuation_chart": peer_valuation_chart
     }
 

@@ -37,9 +37,11 @@ def calculate_ev_to_ebitda(income_statement: pd.DataFrame, balance_sheet: pd.Dat
     return ev_to_ebitda
 
 
-def fetch_metrics(tickers: list[str]) -> pd.DataFrame:
+def fetch_metrics(tickers: list[str], target_ticker: str) -> pd.DataFrame:
 
     all_metrics= []
+
+    tickers = tickers.append(target_ticker)
     
     for ticker in tickers:
         try:
@@ -85,6 +87,7 @@ def fetch_metrics(tickers: list[str]) -> pd.DataFrame:
             )
 
             debt = latest_value(balance_sheet.loc["TotalDebt"])
+
 
             ev_to_ebitda = calculate_ev_to_ebitda(income_statement= income_statement, balance_sheet= balance_sheet, market_cap= market_cap, debt= debt)
 
@@ -147,7 +150,6 @@ def compare_metric(target_value: float, peer_median: float, tolerance=0.10) -> s
     return "below_peers"
     
 
-
 def evaluate_growth(target: pd.Series, peers: pd.DataFrame) -> str:
 
     target_revenue_growth = target["revenue_growth"]
@@ -162,7 +164,7 @@ def evaluate_growth(target: pd.Series, peers: pd.DataFrame) -> str:
     return result
 
 
-def evaluate_profitability(target, peers):
+def evaluate_profitability(target: pd.Series, peers: pd.DataFrame):
     margin_cols = ["gross_margin", "operating_margin", "net_margin"]
 
     details = {}
@@ -329,8 +331,15 @@ def interpret_quality_adjusted_valuation(
 
     return "insufficient_data"
 
+def create_peer_comparison_table(target_metrics: pd.Series, peers_metrics: pd.DataFrame) -> pd.DataFrame:
 
+    """Create a table where target is being compared with peers. Specifically, the following metrics: market_cap, revenue_growth"""
 
+    comparison_table = pd.concat([target_metrics.to_frame().T, peers_metrics])
+    
+    comparison_table = comparison_table.iloc[["market_cap, revenue_growth, pe_ratio, ps_ratio, ev_to_ebitda, fcf_yield"]]
+
+    return comparison_table
 
 def compare_against_peers(target_ticker: str, all_metrics: pd.DataFrame) -> dict:
 
@@ -346,17 +355,14 @@ def compare_against_peers(target_ticker: str, all_metrics: pd.DataFrame) -> dict
                                                                     multiple_conclusion= valuation_comparison.get("multiple_conclusion"),
                                                                     fcf_yield_result= valuation_comparison.get("fcf_yield_result"))
 
+    peer_comparison_table = create_peer_comparison_table(target_metrics= target, peers_metrics= peers)
+
     return {
         "valuation_comparison": valuation_comparison,
         "growth_comparison": growth_comparison,
         "profitability_comparison": profitability_comparison,
-        "quality_adjusted_valuation": quality_adjusted_valuation
+        "quality_adjusted_valuation": quality_adjusted_valuation,
+        "peer_comparison_table" : peer_comparison_table
     }
 
-def create_peer_comparison_table(target_metrics: dict, peer_metrics: pd.DataFrame) -> pd.DataFrame:
 
-    target_metrics= pd.DataFrame(target_metrics).set_index("ticker")
-
-    peer_comparison_table = pd.concat([target_metrics, peer_metrics])
-
-    return peer_comparison_table

@@ -5,7 +5,10 @@ from app.analysis.metrics import calculate_all_metrics
 from app.analysis.valuation import calculate_valuation_metrics
 from app.visualization.plots import generate_all_charts
 from app.reports.report_generator import generate_report
-from app.analysis.dcf import run_dcf_scenarios
+from app.analysis.dcf import run_dcf_scenarios, enter_assumption, get_dcf_scenary_result
+from app.tools.competitor_analysis import get_default_peers, fetch_metrics, compare_against_peers
+from app.analysis.scoring import generate_scorecard
+
 
 
 def parse_args():
@@ -82,29 +85,27 @@ def run_analysis(ticker: str):
 
     dcf_scenarios = run_dcf_scenarios(financials= financials, market_data= market_data)
 
-    while True:
-        try:
-            print("--ASSUMPTIONS--\n1.bear\n2.base\n3,bull")
-            type_of_assumption = int(input("\nWhat kind of assumption are you making?\nAnswer: "))
-            if ( (type_of_assumption < 1) or (3 < type_of_assumption)):
-                print("\nOut of range!!!")
-            else:
-                break
-
-        except:
-            print("Not valid input!!!")
+    type_of_assumption = enter_assumption()
     
-    #Convert from number to its name
-    if type_of_assumption == 1:
-        type_of_assumption = "bear"
-    elif type_of_assumption == 2:
-        type_of_assumption = "base"
-    else:
-        type_of_assumption = "bull"
+    dcf_results = get_dcf_scenary_result(type_of_assumption= type_of_assumption, dcf_scenarios= dcf_scenarios)
 
-    dcf_results= dcf_scenarios[type_of_assumption]
+   # 5. Analysing competitors....
 
-    # 5. Generate charts
+    print("Analysing competitors...")
+
+    peers = get_default_peers(ticker= ticker)
+    all_metrics = fetch_metrics(tickers= peers, target_ticker= ticker)
+    result_comparison = compare_against_peers(target_ticker= ticker, all_metrics= all_metrics)
+
+    # 6. Scoring
+    print("Scoring...")
+
+    risks = None
+
+    scorecard = generate_scorecard(risks= risks, target_ticker= ticker, all_metrics= all_metrics)
+    peer_df = result_comparison.get("peer_comparison_table")
+
+    # 7. Generate charts
     print("Generating charts...")
 
     chart_paths = generate_all_charts(
@@ -113,11 +114,11 @@ def run_analysis(ticker: str):
         cash_flow=cash_flow,
         metrics=metrics,
         historical_prices=historical_prices,
-        sensitivity_table= dcf_results["dcf_sensitivity_table"]
-
+        sensitivity_table= dcf_results["dcf_sensitivity_table"],
+        peer_df= peer_df
     )
 
-    # 6. Generate markdown report
+    # 8. Generate markdown report
     print("Generating report...")
     report_path = generate_report(
         ticker=ticker,
