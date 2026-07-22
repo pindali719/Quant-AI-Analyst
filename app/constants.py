@@ -5,6 +5,7 @@ DEFAULT_PEERS = {
 
 NONE_INPUT = 0
 
+
 SCORING_WEIGHTS = {
     "growth": 0.30,
     "profitability": 0.25,

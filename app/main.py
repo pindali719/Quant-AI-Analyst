@@ -95,15 +95,15 @@ def run_analysis(ticker: str):
 
     peers = get_default_peers(ticker= ticker)
     all_metrics = fetch_metrics(tickers= peers, target_ticker= ticker)
-    result_comparison = compare_against_peers(target_ticker= ticker, all_metrics= all_metrics)
+    comparison_with_peers = compare_against_peers(target_ticker= ticker, all_metrics= all_metrics)
 
     # 6. Scoring
     print("Scoring...")
 
     risks = None
 
-    scorecard = generate_scorecard(risks= risks, target_ticker= ticker, all_metrics= all_metrics)
-    peer_df = result_comparison.get("peer_comparison_table")
+    scorecard = generate_scorecard(risks= risks, target_ticker= ticker, all_metrics= all_metrics, fair_value_per_share= dcf_results.get("fair_value_per_share"), current_price= market_data.get("current_price"))
+    peer_df = comparison_with_peers.get("peer_comparison_table")
 
     # 7. Generate charts
     print("Generating charts...")
@@ -127,7 +127,9 @@ def run_analysis(ticker: str):
         valuation_metrics=valuation_metrics,
         chart_paths=chart_paths,
         output_path=f"outputs/markdown/{ticker}_investment_report.md",
-        dcf_result=dcf_results
+        dcf_result=dcf_results,
+        comparison_with_peers= comparison_with_peers,
+        scorecard= scorecard
     )
 
     print(f"Done. Report saved to: {report_path}")

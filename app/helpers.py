@@ -21,3 +21,14 @@ def latest_value(value):
 
     # If it was not a Series, just return it as it is
     return value
+
+def safe_division(numerator: float, denominator: float):
+
+    """Divide two numbers while validating the denominator."""
+
+    if denominator == 0:
+        raise ZeroDivisionError("Denominator cannot be zero.")
+    if denominator == None:
+        raise ValueError("Denominator cannot be None")
+    
+    return numerator/denominator

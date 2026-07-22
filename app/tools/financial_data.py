@@ -1,6 +1,6 @@
 import yfinance as yf
 import pandas as pd
-from helpers import latest_value
+from app.helpers import latest_value
 
 def fetch_income_statement(ticker: str) -> pd.DataFrame:
 

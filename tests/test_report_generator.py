@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from app.reports.report_generator import (
     generate_markdown_report,

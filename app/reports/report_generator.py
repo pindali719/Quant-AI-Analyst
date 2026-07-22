@@ -324,7 +324,10 @@ def generate_report(
     valuation_metrics: dict,
     chart_paths: dict,
     output_path: str,
-    dcf_result: dict
+    dcf_result: dict,
+    comparison_with_peers: dict,
+    scorecard: dict
+
 ) -> str:
     
     """
@@ -338,7 +341,9 @@ def generate_report(
         metrics=metrics,
         valuation_metrics=valuation_metrics,
         chart_paths=chart_paths,
-        dcf_result=dcf_result
+        dcf_result=dcf_result,
+        comparison_with_peers= comparison_with_peers,
+        scorecard= scorecard
     )
 
     saved_path = save_markdown_report(markdown_text, output_path)
