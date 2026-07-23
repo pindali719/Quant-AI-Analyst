@@ -156,7 +156,7 @@ def make_dcf_section(dcf_result: dict, currency: str) -> str:
 
     return "\n".join(lines)
 
-def make_peer_comparison_text(comparison_with_peers: dict, ticker):
+def make_peer_comparison_text(comparison_with_peers: dict, ticker: str) -> str:
     
     peer_comparison_table = comparison_with_peers.get("peer_comparison_table")
 
@@ -250,7 +250,7 @@ def generate_markdown_report(
     valuation_text = make_valuation_text(valuation_metrics= valuation_metrics)
     chart_text = make_chart_text(chart_paths= chart_paths)
     dcf_text = make_dcf_section(dcf_result = dcf_result, currency= currency)
-    peer_comparison_text = make_peer_comparison_text(comparison_with_peers= comparison_with_peers)
+    peer_comparison_text = make_peer_comparison_text(comparison_with_peers= comparison_with_peers, ticker= ticker)
     scorecard_text = make_scorecard_text(scorecard= scorecard)
 
     recommendation = make_preliminary_recommendation(metrics, valuation_metrics)
@@ -277,7 +277,7 @@ def generate_markdown_report(
 
 {dcf_text}
 
-## Peer comparison
+## Peer Comparison
 
 {peer_comparison_text}
 

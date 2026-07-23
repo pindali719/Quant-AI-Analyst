@@ -64,6 +64,90 @@ def generate_dcf_results():
 
     return result
 
+def generate_comparison_with_peers():
+
+    """Generates an example peer-comparison result."""
+
+    peer_comparison_table = pd.DataFrame(
+        {
+            "revenue_growth": [0.25, 0.12, 0.08],
+            "gross_margin": [0.65, 0.50, 0.42],
+            "operating_margin": [0.40, 0.20, 0.15],
+            "net_margin": [0.30, 0.15, 0.10],
+            "pe_ratio": [30.0, 25.0, 20.0],
+            "ps_ratio": [10.0, 7.0, 5.0],
+            "ev_to_ebitda": [22.0, 18.0, 15.0],
+            "fcf_yield": [0.03, 0.04, 0.05],
+        },
+        index=["NVDA", "AMD", "INTC"],
+    )
+
+
+    comparison_with_peers = {
+        "peer_comparison_table": peer_comparison_table,
+
+        "valuation_comparison": {
+            "multiple_results": {
+                "pe_ratio": "above_peers",
+                "ps_ratio": "above_peers",
+                "ev_to_ebitda": "in_line",
+            },
+            "multiple_conclusion": "premium_valuation",
+            "fcf_yield_result": "below_peers",
+        },
+
+        "growth_comparison": {
+            "target_revenue_growth": 0.25,
+            "peer_median_revenue_growth": 0.12,
+            "growth_comparison": "above_peers",
+        },
+
+        "profitability_comparison": {
+            "margin_comparisons": {
+                "gross_margin": "above_peers",
+                "operating_margin": "above_peers",
+                "net_margin": "in_line",
+            },
+            "profitability_comparison": "above_peers",
+        },
+
+        "quality_adjusted_valuation":
+            "premium_supported_by_quality_but_weak_fcf_yield",
+    }
+
+    return comparison_with_peers
+
+
+
+def generate_scorecard():
+
+    """Generates an example investment scorecard."""
+
+    scorecard = {
+        "scores": {
+            "growth": 5,
+            "profitability": 4,
+            "balance_sheet": 4,
+            "valuation": 3,
+            "risk": 3,
+        },
+
+        "overall_score": 4.0,
+
+        "recommendation": "Selective Buy",
+
+        "weights": {
+            "growth": 0.30,
+            "profitability": 0.25,
+            "balance_sheet": 0.15,
+            "valuation": 0.20,
+            "risk": 0.10,
+        },
+    }
+
+    return scorecard
+
+
 
 
 def test_generate_markdown_report_contains_required_sections():
@@ -85,6 +169,7 @@ def test_generate_markdown_report_contains_required_sections():
         "longName": "NVIDIA Corporation",
         "sector": "Technology",
         "industry": "Semiconductors",
+        "currency": "USD"
     }
 
     chart_paths = {
@@ -94,13 +179,19 @@ def test_generate_markdown_report_contains_required_sections():
 
     dcf_result = generate_dcf_results()
 
+    comparison_with_peers = generate_comparison_with_peers()
+
+    scorecard = generate_scorecard()
+
     report = generate_markdown_report(
         ticker="NVDA",
         company_info=company_info,
         metrics=metrics,
         valuation_metrics=valuation_metrics,
         chart_paths=chart_paths,
-        dcf_result= dcf_result
+        dcf_result= dcf_result,
+        comparison_with_peers= comparison_with_peers,
+        scorecard= scorecard
     )
 
     assert "# NVDA Investment Report" in report
@@ -108,9 +199,15 @@ def test_generate_markdown_report_contains_required_sections():
     assert "## Financial Metrics" in report
     assert "## Valuation Metrics" in report
     assert "## DCF Analysis" in report
+    assert "## Peer Comparison" in report
+    assert "## Scorecard" in report
     assert "## Charts" in report
     assert "## Preliminary Recommendation" in report
     assert "## Disclaimer" in report
+
+    assert "Selective Buy" in report
+    assert "4.0" in report
+    assert "Selective Buy" in report
     assert "educational and research purposes" in report
 
 
