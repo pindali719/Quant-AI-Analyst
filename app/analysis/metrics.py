@@ -65,34 +65,32 @@ def calculate_free_cash_flow(cash_flow: pd.DataFrame) -> pd.Series:
 
 def calculate_fcf_margin(cash_flow: pd.DataFrame, income_statement: pd.DataFrame) -> pd.Series:
 
-    fcf_margins=[]
+    # Keep only dates that exist in both statements.
+    common_dates = cash_flow.columns.intersection(income_statement.columns)
 
-    for col in cash_flow.columns:
-        free_cash_flow=cash_flow[col]["OperatingCashFlow"]+cash_flow[col]["CapitalExpenditure"]
+    free_cash_flow = cash_flow.loc["FreeCashFlow", common_dates]
 
-        fcf_margin=free_cash_flow/income_statement[col]["TotalRevenue"]
+    revenue = income_statement.loc["TotalRevenue", common_dates]
 
-        fcf_margins.append(fcf_margin)
+    fcf_margin = free_cash_flow / revenue
 
-    fcf_margins=pd.Series(fcf_margins)
+    return fcf_margin
 
 
-    return fcf_margins
 
 def calculate_all_metrics(income_statement: pd.DataFrame, cash_flow: pd.DataFrame, balance_sheet: pd.DataFrame) -> pd.DataFrame:
 
     revenue_growth= calculate_revenue_growth(income_statement)
-
     gross_margin=calculate_gross_margin(income_statement)
-
     operating_margin=calculate_operating_margin(income_statement)
-
     net_margin=calculate_net_margin(income_statement)
 
     free_cash_flow=calculate_free_cash_flow(cash_flow)
+    free_cash_flow = free_cash_flow.reindex(income_statement.columns)
 
     fcf_margin=calculate_fcf_margin(cash_flow, income_statement)
-
+    fcf_margin = fcf_margin.reindex(income_statement.columns)
+    
     years=income_statement.columns.year
 
     all_metrics = pd.DataFrame(

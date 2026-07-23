@@ -96,11 +96,10 @@ def get_ROE(ticker: str) -> float:
 
     return roe
 
-def score_ROE(metrics: pd.Series) -> int:
+def score_ROE(target_ticker: str) -> int:
 
-    ticker = metrics.get("ticker")
 
-    roe = get_ROE(ticker= ticker)
+    roe = get_ROE(ticker= target_ticker)
 
     if roe < 0:
 
@@ -132,8 +131,8 @@ def get_ROIC(ticker: str) -> float:
 
     #Computing Invested Capital
 
-    stockholder_equity = latest_value(balance_sheet.get("StockholdersEquity"))
-    debt = latest_value(balance_sheet.get("TotalDebt"))
+    stockholder_equity = latest_value(balance_sheet.loc["StockholdersEquity"])
+    debt = latest_value(balance_sheet.loc["TotalDebt"])
     cash = latest_value(balance_sheet.loc["CashAndCashEquivalents"])
 
     invested_capital = stockholder_equity + debt - cash
@@ -143,11 +142,9 @@ def get_ROIC(ticker: str) -> float:
     return roic
 
 
-def score_ROIC(metrics: pd.Series) -> int:
+def score_ROIC(target_ticker: str) -> int:
 
-    ticker = metrics.get("ticker")
-
-    roic = get_ROIC(ticker= ticker)
+    roic = get_ROIC(ticker= target_ticker)
 
     bounds = [0.20, 0.12, 0.08, 0.0]
 
@@ -156,13 +153,13 @@ def score_ROIC(metrics: pd.Series) -> int:
     return score
     
 
-def score_profitability(metrics: pd.Series) -> int:
+def score_profitability(metrics: pd.Series, target_ticker: str) -> int:
 
     margin_score = score_margin(metrics= metrics)
 
-    roe_score = score_ROE(metrics= metrics)
+    roe_score = score_ROE(target_ticker = target_ticker)
 
-    roic_score = score_ROIC(metrics= metrics)
+    roic_score = score_ROIC(target_ticker = target_ticker)
 
     final_score = 0.5 * margin_score + 0.3 * roic_score + 0.2* roe_score
 
@@ -172,12 +169,11 @@ def score_profitability(metrics: pd.Series) -> int:
 
 
 
-def score_leverage(metrics: pd.Series) -> int:
+def score_leverage(metrics: pd.Series, target_ticker: str) -> int:
     
     #Edge case: if net cash is greater than debt
-    ticker = metrics.get("ticker")
 
-    all_financial_data = fetch_all_financial_data(ticker= ticker)
+    all_financial_data = fetch_all_financial_data(ticker= target_ticker)
 
     balance_sheet = all_financial_data.get("balance_sheet")
 
@@ -203,11 +199,10 @@ def score_leverage(metrics: pd.Series) -> int:
 
     return score
 
-def score_liquidity(metrics: pd.Series) -> int:
+def score_liquidity(target_ticker: str) -> int:
 
-    ticker = metrics.get("ticker")
 
-    all_financial_data = fetch_all_financial_data(ticker= ticker)
+    all_financial_data = fetch_all_financial_data(ticker= target_ticker)
 
     balance_sheet = all_financial_data.get("balance_sheet")
 
@@ -222,10 +217,10 @@ def score_liquidity(metrics: pd.Series) -> int:
 
     return score
 
-def score_balance_sheet(metrics: pd.Series) -> int:
+def score_balance_sheet(metrics: pd.Series, target_ticker: str) -> int:
 
-    leverage_score = score_leverage(metrics= metrics)
-    liquidity_score = score_liquidity(metrics= metrics)
+    leverage_score = score_leverage(metrics= metrics, target_ticker= target_ticker)
+    liquidity_score = score_liquidity(target_ticker= target_ticker)
 
     balance_sheet_score =   0.6*leverage_score + 0.4*liquidity_score
 
@@ -366,8 +361,8 @@ def generate_scorecard(risks: dict, target_ticker: str, all_metrics: pd.DataFram
     metrics = all_metrics.loc[target_ticker]
 
     growth_score = score_revenue_growth(metrics= metrics)
-    profitability_score = score_profitability(metrics= metrics)
-    balance_sheet_score = score_balance_sheet(metrics= metrics)
+    profitability_score = score_profitability(metrics= metrics, target_ticker= target_ticker)
+    balance_sheet_score = score_balance_sheet(metrics= metrics, target_ticker= target_ticker)
     valuation_score = score_valuation(target_ticker=target_ticker, all_metrics= all_metrics, fair_value_per_share= fair_value_per_share, current_price= current_price)
     risk_score = score_risk(risks=risks)
 

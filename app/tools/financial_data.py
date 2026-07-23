@@ -4,48 +4,77 @@ from app.helpers import latest_value
 
 def fetch_income_statement(ticker: str) -> pd.DataFrame:
 
-    ticker= yf.Ticker(ticker)
+    ticker_symbol = yf.Ticker(ticker)
 
-    income_statement= (ticker.get_income_stmt(freq="yearly")).loc[["TotalRevenue", "GrossProfit", "OperatingIncome", "NetIncome", "PretaxIncome", "TaxProvision", "EBITDA"]]
+    income_statement= ticker_symbol.get_income_stmt(freq="yearly")
+
+    if income_statement.empty:
+        raise ValueError("Yahoo Finance returned no Income Statement data.")
+
+    rows_to_keep = ["TotalRevenue", "GrossProfit", "OperatingIncome", "NetIncome", "PretaxIncome", "TaxProvision", "EBITDA"]
+
+    income_statement = income_statement.reindex(rows_to_keep)
 
     return income_statement
 
-def fetch_balance_sheet(tickets: str) -> pd.DataFrame:
+def fetch_balance_sheet(ticker: str) -> pd.DataFrame:
 
-    ticker= yf.Ticker(tickets)
+    ticker_symbol= yf.Ticker(ticker)
 
-    balance_sheet= (ticker.get_balance_sheet(freq="yearly")).loc[["TotalAssets", "TotalLiabilitiesNetMinorityInterest", "StockholdersEquity", "TotalDebt", "CashAndCashEquivalents", "CurrentAssets", "CurrentLiabilities"]]
+    balance_sheet= (ticker_symbol.get_balance_sheet(freq="yearly"))
+
+    if balance_sheet.empty:
+        raise ValueError("Yahoo Finance returned no balance-sheet data.")
+
+    rows_to_keep = ["TotalAssets", "TotalLiabilitiesNetMinorityInterest", "StockholdersEquity", "TotalDebt", "CashAndCashEquivalents", "CurrentAssets", "CurrentLiabilities"]
+
+    balance_sheet = balance_sheet.reindex(rows_to_keep)
 
     return balance_sheet
 
-def fetch_cash_flow(tickets: str) -> pd.DataFrame:
+def fetch_cash_flow(ticker) -> pd.DataFrame:
 
-    ticker= yf.Ticker(tickets)
+    ticker_symbol= yf.Ticker(ticker)
 
-    cash_flow= (ticker.get_cash_flow(freq="yearly")).loc[["OperatingCashFlow", "CapitalExpenditure", "FreeCashFlow", "CashDividendsPaid", "RepurchaseOfCapitalStock"]]
+    cash_flow = ticker_symbol.get_cash_flow(freq="yearly")
 
-    return cash_flow
+    if cash_flow.empty:
+        raise ValueError("Yahoo Finance returned no cash-flow data.")
 
-def fetch_historical_prices(tickets: str) -> pd.DataFrame:
+    rows_to_keep = [
+        "OperatingCashFlow",
+        "CapitalExpenditure",
+        "FreeCashFlow",
+        "CashDividendsPaid",
+        "RepurchaseOfCapitalStock",
+    ]
 
-    ticker= yf.Ticker(tickets)
+    return cash_flow.reindex(rows_to_keep)
 
-    historical_data= (ticker.history(period="5y", interval="1d"))
+
+def fetch_historical_prices(ticker: str) -> pd.DataFrame:
+
+    ticker_symbol= yf.Ticker(ticker)
+
+    historical_data= (ticker_symbol.history(period="5y", interval="1d"))
+
+    if historical_data.empty:
+        raise ValueError("Yahoo Finance returned no historical data.")
 
     return historical_data
 
-def fetch_company_info(tickets: str) -> dict:
+def fetch_company_info(ticker: str) -> dict:
 
 
-    ticker= yf.Ticker(tickets)
+    ticker_symbol= yf.Ticker(ticker)
 
     fields=["longBusinessSummary", "sector", "industry", "marketCap", "exchange", "currency", "currentPrice", "enterpriseValue", "sharesOutstanding", "trailingPE"]
 
-    info = ticker.get_info()
+    info = ticker_symbol.get_info()
 
     selected_info={}
 
-    balance_sheet = fetch_balance_sheet(tickets= tickets)
+    balance_sheet = fetch_balance_sheet(ticker= ticker)
 
     market_cap = info.get("marketCap")
     debt = latest_value(balance_sheet.loc["TotalDebt"])

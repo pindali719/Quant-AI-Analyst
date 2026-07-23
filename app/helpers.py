@@ -30,5 +30,8 @@ def safe_division(numerator: float, denominator: float):
         raise ZeroDivisionError("Denominator cannot be zero.")
     if denominator == None:
         raise ValueError("Denominator cannot be None")
+    if numerator == None:
+        raise ValueError("Numerator cannot be None")
+    
     
     return numerator/denominator

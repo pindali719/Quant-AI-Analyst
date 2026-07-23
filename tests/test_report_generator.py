@@ -204,7 +204,6 @@ def test_generate_markdown_report_contains_required_sections():
     assert "## Charts" in report
     assert "## Preliminary Recommendation" in report
     assert "## Disclaimer" in report
-
     assert "Selective Buy" in report
     assert "4.0" in report
     assert "Selective Buy" in report

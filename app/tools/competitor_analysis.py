@@ -4,7 +4,7 @@ import pandas as pd
 from app.constants import DEFAULT_PEERS
 from app.tools.financial_data import fetch_all_financial_data
 from app.analysis.metrics import calculate_all_metrics
-from app.helpers import latest_value
+from app.helpers import latest_value, safe_division
 
 def get_default_peers(ticker: str) -> list[str]:
 
@@ -41,14 +41,14 @@ def fetch_metrics(tickers: list[str], target_ticker: str) -> pd.DataFrame:
 
     all_metrics= []
 
-    tickers = tickers.append(target_ticker)
+    tickers.append(target_ticker)
     
     for ticker in tickers:
         try:
 
             all_financial_data = fetch_all_financial_data(ticker= ticker)
             income_statement = all_financial_data.get("income_statement")
-            metrics = calculate_all_metrics(
+            metrics_of_ticker = calculate_all_metrics(
                 income_statement= income_statement,
                 cash_flow= all_financial_data.get("cash_flow"),
                 balance_sheet= all_financial_data.get("balance_sheet"))
@@ -56,11 +56,13 @@ def fetch_metrics(tickers: list[str], target_ticker: str) -> pd.DataFrame:
             peer_profile= all_financial_data.get("company_info")
             balance_sheet = all_financial_data.get("balance_sheet")
 
+            
+            revenue_growth = latest_value(metrics_of_ticker.loc["revenue_growth"])
+            gross_margin = latest_value(metrics_of_ticker.loc["gross_margin"])
+            operating_margin= latest_value(metrics_of_ticker.loc["operating_margin"])
+            net_margin = latest_value(metrics_of_ticker.loc["net_margin"])
+
             market_cap = peer_profile.get("marketCap")
-            revenue_growth = latest_value(metrics.get("revenue_growth"))
-            gross_margin = latest_value(metrics.get("gross_margin"))
-            operating_margin= latest_value(metrics.get("operating_margin"))
-            net_margin = latest_value(metrics.get("net_margin"))
 
             #get the anual pe_ratio, not from the last 12 months
             net_income = latest_value(
@@ -94,12 +96,12 @@ def fetch_metrics(tickers: list[str], target_ticker: str) -> pd.DataFrame:
             stockholders_equity = latest_value(balance_sheet.loc["StockholdersEquity"])
 
             #In case division by 0, or some of the terms are "None"
-            try:
-                fcf_yield = latest_value(metrics.get("free_cash_flow")) / market_cap
-            except:
-                fcf_yield =None
 
-            leverage = debt/stockholders_equity
+            latest_fcf = latest_value(metrics_of_ticker.loc["free_cash_flow"])
+
+            fcf_yield = safe_division(numerator= latest_fcf, denominator= market_cap)
+
+            leverage = safe_division(numerator = debt, denominator = stockholders_equity)
 
             metrics ={
                 "ticker": ticker,
@@ -118,8 +120,9 @@ def fetch_metrics(tickers: list[str], target_ticker: str) -> pd.DataFrame:
             all_metrics.append(metrics)
 
 
-        except:
-            print(f"Skipping {ticker}...")
+        except Exception as error:
+            print(f"Skipping {ticker}: "f"{type(error).__name__}: {error}") 
+            raise
     
     all_metrics= pd.DataFrame(all_metrics).set_index("ticker")
     
@@ -337,7 +340,7 @@ def create_peer_comparison_table(target_metrics: pd.Series, peers_metrics: pd.Da
 
     comparison_table = pd.concat([target_metrics.to_frame().T, peers_metrics])
     
-    comparison_table = comparison_table.iloc[["market_cap, revenue_growth, pe_ratio, ps_ratio, ev_to_ebitda, fcf_yield"]]
+    comparison_table = comparison_table.loc[:, ["market_cap", "revenue_growth", "pe_ratio", "ps_ratio", "ev_to_ebitda", "fcf_yield"]]
 
     return comparison_table
 
