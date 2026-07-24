@@ -125,7 +125,7 @@ def make_dcf_section(dcf_result: dict, currency: str) -> str:
     equity_value = dcf_result.get("equity_value")
     assumptions = dcf_result.get("assumptions", {})
     projected_fcf = dcf_result.get("projected_fcf")
-    sensitivity_table = dcf_result.get("sensitivity_table")
+    sensitivity_table = dcf_result.get("dcf_sensitivity_table")
 
 
 
@@ -156,23 +156,35 @@ def make_dcf_section(dcf_result: dict, currency: str) -> str:
 
     return "\n".join(lines)
 
+
+
+
 def make_peer_comparison_text(comparison_with_peers: dict, ticker: str) -> str:
     
     peer_comparison_table = comparison_with_peers.get("peer_comparison_table")
 
     #A list containing the indexes of the table (so it contains the tickers)
     peers = peer_comparison_table.index.tolist()
-    peers = peers.remove(ticker)
+    peers.remove(ticker)
 
-    summary = peer_comparison_table.get("quality_adjusted_valuation")
+    peers_text = (
+        ", ".join(peers)
+        if peers
+        else "no available peers"
+    )
+
+    summary_text = comparison_with_peers.get(
+        "quality_adjusted_valuation",
+        "insufficient_data"
+    )
 
     lines = []
 
-    lines.append(f"{ticker} is compared against {peers}.")
+    lines.append(f"{ticker} is compared against {peers_text}.")
     lines.append("")
     lines.append(f"{dataframe_to_markdown(peer_comparison_table)}")
     lines.append("")
-    lines.append(f"Summary: {summary}")
+    lines.append(f"Summary: {summary_text}")
     lines.append("")
 
     return "\n".join(lines)
@@ -195,7 +207,7 @@ def make_scorecard_text(scorecard: dict):
     
 
 
-def make_preliminary_recommendation(metrics: pd.DataFrame, valuation_metrics: dict) -> str:
+def generate_investment_view(metrics: pd.DataFrame, valuation_metrics: dict) -> str:
     """
     Very simple rule-based recommendation.
 
@@ -253,7 +265,7 @@ def generate_markdown_report(
     peer_comparison_text = make_peer_comparison_text(comparison_with_peers= comparison_with_peers, ticker= ticker)
     scorecard_text = make_scorecard_text(scorecard= scorecard)
 
-    recommendation = make_preliminary_recommendation(metrics, valuation_metrics)
+    recommendation = generate_investment_view(metrics, valuation_metrics)
 
 
     report = f"""# {ticker} Investment Report
@@ -289,7 +301,7 @@ def generate_markdown_report(
 
 {chart_text}
 
-## Preliminary Recommendation
+## Investment View
 
 {recommendation}
 

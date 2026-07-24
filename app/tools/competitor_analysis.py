@@ -4,7 +4,7 @@ import pandas as pd
 from app.constants import DEFAULT_PEERS
 from app.tools.financial_data import fetch_all_financial_data
 from app.analysis.metrics import calculate_all_metrics
-from app.helpers import latest_value, safe_division
+from app.helpers import latest_value, safe_division, ttm_value
 
 def get_default_peers(ticker: str) -> list[str]:
 
@@ -12,30 +12,58 @@ def get_default_peers(ticker: str) -> list[str]:
 
     return peers
 
-def calculate_ev_to_ebitda(income_statement: pd.DataFrame, balance_sheet: pd.DataFrame, market_cap: float, debt: float) -> float:
+def calculate_multiples(market_cap: float, net_income_ttm: float, revenue_ttm: float, enterprise_value: float, ebitda_ttm: float) -> dict:
 
-    ebitda = latest_value(
-        income_statement.loc["EBITDA"]
-    )
+    if market_cap is not None and net_income_ttm is not None and net_income_ttm > 0:
+        pe_ratio = market_cap / net_income_ttm
+    else:
+        pe_ratio = None
 
-    cash = latest_value(
-        balance_sheet.loc["CashAndCashEquivalents"]
-    )
+    if market_cap is not None and revenue_ttm is not None and revenue_ttm > 0:
+        ps_ratio = market_cap / revenue_ttm
+    else:
+        ps_ratio = None
 
-    enterprise_value = (
-        market_cap + debt - cash
-        if None not in (market_cap, debt, cash)
-        else None
-    )
 
-    ev_to_ebitda = (
-        enterprise_value / ebitda
-        if enterprise_value is not None
-        and ebitda not in (None, 0)
-        else None
-)
-    return ev_to_ebitda
+    if enterprise_value is not None and ebitda_ttm is not None and ebitda_ttm > 0:
+        ev_to_ebitda = enterprise_value / ebitda_ttm
+    else:
+        ev_to_ebitda = None
 
+    return {
+        "pe_ratio": pe_ratio,
+        "ps_ratio": ps_ratio,
+        "ev_to_ebida": ev_to_ebitda,
+    }
+
+def calculate_fcf_yield(free_cash_flow_ttm: float, market_cap: float) -> float:
+
+    if free_cash_flow_ttm is not None and market_cap is not None and market_cap > 0:
+        fcf_yield = free_cash_flow_ttm / market_cap
+    else:
+        fcf_yield = None
+
+    return fcf_yield
+
+def calculate_leverage(debt: float, stockholders_equity: float) -> float:
+
+    if debt is not None and stockholders_equity is not None and stockholders_equity > 0:
+        leverage = debt / stockholders_equity
+    else:
+        leverage = None
+
+    return leverage
+
+
+def get_enterprise_value(peer_profile: dict, market_cap: float, debt: float, cash: float) -> float:
+
+    enterprise_value = peer_profile.get("enterpriseValue")
+
+    if enterprise_value is None and None not in (market_cap, debt, cash):
+
+        enterprise_value = market_cap + debt - cash
+
+    return enterprise_value
 
 def fetch_metrics(tickers: list[str], target_ticker: str) -> pd.DataFrame:
 
@@ -46,15 +74,15 @@ def fetch_metrics(tickers: list[str], target_ticker: str) -> pd.DataFrame:
     for ticker in tickers:
         try:
 
-            all_financial_data = fetch_all_financial_data(ticker= ticker)
-            income_statement = all_financial_data.get("income_statement")
-            metrics_of_ticker = calculate_all_metrics(
-                income_statement= income_statement,
-                cash_flow= all_financial_data.get("cash_flow"),
-                balance_sheet= all_financial_data.get("balance_sheet"))
-
             peer_profile= all_financial_data.get("company_info")
-            balance_sheet = all_financial_data.get("balance_sheet")
+            all_financial_data = fetch_all_financial_data(ticker= ticker)
+            annual_income_statement = all_financial_data.get("income_statement")
+            annual_cash_flow = all_financial_data.get("cash_flow")
+            annual_balance_sheet = all_financial_data.get("balance_sheet")
+            metrics_of_ticker = calculate_all_metrics(
+                income_statement= annual_income_statement,
+                cash_flow= annual_cash_flow,
+                balance_sheet= annual_balance_sheet)
 
             
             revenue_growth = latest_value(metrics_of_ticker.loc["revenue_growth"])
@@ -62,46 +90,41 @@ def fetch_metrics(tickers: list[str], target_ticker: str) -> pd.DataFrame:
             operating_margin= latest_value(metrics_of_ticker.loc["operating_margin"])
             net_margin = latest_value(metrics_of_ticker.loc["net_margin"])
 
+            quarterly_income_statement = all_financial_data["quarterly_income_statement"]
+
+            quarterly_cash_flow = all_financial_data["quarterly_cash_flow"]
+
+            quarterly_balance_sheet = all_financial_data["quarterly_balance_sheet"]
+
+
+            net_income_ttm = ttm_value(quarterly_income_statement, "NetIncome")
+            revenue_ttm = ttm_value(quarterly_income_statement, "TotalRevenue")
+            ebitda_ttm = ttm_value(quarterly_income_statement,"EBITDA")
+            free_cash_flow_ttm = ttm_value(quarterly_cash_flow, "FreeCashFlow")
             market_cap = peer_profile.get("marketCap")
 
-            #get the anual pe_ratio, not from the last 12 months
-            net_income = latest_value(
-                income_statement.loc["NetIncome"]
-            )
+            cash = latest_value(quarterly_balance_sheet.loc["CashAndCashEquivalents"])
+            debt = latest_value(quarterly_balance_sheet.loc["TotalDebt"])
+            stockholders_equity = latest_value(quarterly_balance_sheet.loc["StockholdersEquity"])
 
-            pe_ratio = (
-                market_cap / net_income
-                if market_cap is not None
-                and net_income not in (None, 0)
-                else None
-            )
+            enterprise_value = get_enterprise_value(peer_profile= peer_profile, market_cap= market_cap, debt= debt, cash= cash)
 
-            #get the anual ps_ratio, not from the las 12 months
-            revenue = latest_value(
-                income_statement.loc["TotalRevenue"]
-            )
-
-            ps_ratio = (
-                market_cap / revenue
-                if market_cap is not None
-                and revenue not in (None, 0)
-                else None
-            )
-
-            debt = latest_value(balance_sheet.loc["TotalDebt"])
+            multiples = calculate_multiples(
+                market_cap= market_cap,
+                net_income_ttm= net_income_ttm,
+                revenue_ttm= revenue_ttm,
+                enterprise_value= enterprise_value, 
+                ebitda_ttm= ebitda_ttm,
+                )
+            
+            pe_ratio = multiples.get("pe_ratio")
+            ps_ratio = multiples.get("ps_ratio")
+            ev_to_ebitda = multiples.get("ev_to_ebitda")
 
 
-            ev_to_ebitda = calculate_ev_to_ebitda(income_statement= income_statement, balance_sheet= balance_sheet, market_cap= market_cap, debt= debt)
+            fcf_yield = calculate_fcf_yield(free_cash_flow_ttm= free_cash_flow_ttm, market_cap= market_cap)
 
-            stockholders_equity = latest_value(balance_sheet.loc["StockholdersEquity"])
-
-            #In case division by 0, or some of the terms are "None"
-
-            latest_fcf = latest_value(metrics_of_ticker.loc["free_cash_flow"])
-
-            fcf_yield = safe_division(numerator= latest_fcf, denominator= market_cap)
-
-            leverage = safe_division(numerator = debt, denominator = stockholders_equity)
+            leverage = calculate_leverage(debt= debt, stockholders_equity= stockholders_equity)
 
             metrics ={
                 "ticker": ticker,

@@ -1,6 +1,7 @@
 
 import pandas as pd
 from app.analysis.metrics import calculate_fcf_margin
+from app.helpers import latest_value
 
 def project_revenue(latest_revenue: float, growth_rates: list[float]) -> list[float]:
 
@@ -43,157 +44,218 @@ def calculate_terminal_value(final_year_fcf: float, discount_rate: float, termin
 
     return terminal_value
 
+def calculate_enterprise_value(discounted_fcf: list[float], discounted_terminal_value: float) -> float:
+
+    enterprise_value = sum(discounted_fcf) + discounted_terminal_value
+
+    return enterprise_value
+
 def calculate_equity_value(enterprise_value: float, cash: float, debt: float) -> float:
 
     equity_value =  enterprise_value + cash - debt
 
     return equity_value
 
-def calculate_fair_value_per_share(equity_value: float, shares_outstanding: float) -> float:
+def calculate_fair_value_per_share(equity_value: float, shares_outstanding: float, diluted_average_shares) -> float:
 
-    fair_value_per_share = equity_value / shares_outstanding
+    if diluted_average_shares == None:
+        return equity_value / shares_outstanding
 
-    return fair_value_per_share
+    return equity_value / diluted_average_shares
 
 
 def create_dcf_sensitivity_table(
-    base_fcf: float,
+    projected_fcf: list[float],
+    cash: float,
+    debt: float,
     shares_outstanding: float,
+    diluted_average_shares: float | None,
     discount_rates: list[float],
     terminal_growth_rates: list[float],
 ) -> pd.DataFrame:
     """
     Create a DCF sensitivity table.
 
-    Rows = discount rates
-    Columns = terminal growth rates
-    Values = fair value per share
+    Rows:
+        Discount rates.
+
+    Columns:
+        Terminal growth rates.
+
+    Values:
+        Equity fair value per share.
+
+    The operating forecast remains constant. Only the discount
+    rate and terminal growth rate change between table cells.
     """
 
-    projection_years = 5
-    fcf_growth_rate = 0.05
+    if not projected_fcf:
+        raise ValueError("projected_fcf cannot be empty.")
 
-#############################################################
-    #Creates sensitivity table
+    projection_years = len(projected_fcf)
 
-    row_labels = []
+    row_labels = [
+        f"{discount_rate:.1%}"
+        for discount_rate in discount_rates
+    ]
 
-    for rate in discount_rates:
-        percentage_value = rate * 100
-        label = str(round(percentage_value, 1)) + "%"
-        row_labels.append(label)
-
-
-    column_labels = []
-
-    for growth in terminal_growth_rates:
-        percentage_value = growth * 100
-        label = str(round(percentage_value, 1)) + "%"
-        column_labels.append(label)
-
+    column_labels = [
+        f"{terminal_growth:.1%}"
+        for terminal_growth in terminal_growth_rates
+    ]
 
     table = pd.DataFrame(
         index=row_labels,
         columns=column_labels,
+        dtype=float,
     )
 
-    #########################################################
-
-    #Fill the table
-    
     for discount_rate in discount_rates:
         for terminal_growth in terminal_growth_rates:
 
-            # Avoid invalid DCF formula
+            row_label = f"{discount_rate:.1%}"
+            column_label = f"{terminal_growth:.1%}"
+
+            # Gordon Growth formula is invalid when r <= g.
             if discount_rate <= terminal_growth:
-                fair_value_per_share = None
+                table.loc[row_label, column_label] = float("nan")
+                continue
 
-            else:
-                projected_fcf = []
+            discounted_fcf = discount_cash_flows(
+                cash_flows=projected_fcf,
+                discount_rate=discount_rate,
+            )
 
-                current_fcf = base_fcf
+            terminal_value = calculate_terminal_value(
+                final_year_fcf=projected_fcf[-1],
+                discount_rate=discount_rate,
+                terminal_growth=terminal_growth,
+            )
 
+            discounted_terminal_value = (
+                terminal_value
+                / ((1 + discount_rate) ** projection_years)
+            )
 
-                for _ in range(projection_years):
-                    current_fcf = current_fcf * (1 + fcf_growth_rate)
-                    projected_fcf.append(current_fcf)
+            enterprise_value = calculate_enterprise_value(
+                discounted_fcf=discounted_fcf,
+                discounted_terminal_value=discounted_terminal_value,
+            )
 
-                discounted_fcf = discount_cash_flows(
-                    cash_flows=projected_fcf,
-                    discount_rate=discount_rate,
-                )
+            equity_value = calculate_equity_value(
+                enterprise_value=enterprise_value,
+                cash=cash,
+                debt=debt,
+            )
 
-                terminal_value = calculate_terminal_value(
-                    final_year_fcf=projected_fcf[-1],
-                    discount_rate=discount_rate,
-                    terminal_growth=terminal_growth,
-                )
+            fair_value_per_share = calculate_fair_value_per_share(
+                equity_value=equity_value,
+                shares_outstanding=shares_outstanding,
+                diluted_average_shares=diluted_average_shares,
+            )
 
-                discounted_terminal_value = terminal_value / (
-                    (1 + discount_rate) ** projection_years
-                )
-
-                enterprise_value = sum(discounted_fcf) + discounted_terminal_value
-
-                fair_value_per_share = calculate_fair_value_per_share(
-                    equity_value=enterprise_value,
-                    shares_outstanding=shares_outstanding,
-                )
-            
-
-            table.loc[f"{discount_rate:.1%}", f"{terminal_growth:.1%}"] = fair_value_per_share
+            table.loc[row_label, column_label] = fair_value_per_share
 
     return table
 
-def run_dcf(financials, market_data, assumptions) -> dict:
+def run_dcf(
+    financials,
+    market_data,
+    assumptions,
+) -> dict:
+    """
+    Run a scenario-based discounted cash-flow valuation.
+
+    Revenue is projected using the scenario growth rates.
+    Free cash flow is projected using the scenario FCF margin.
+    """
 
     income_statement = financials["income_statement"]
-    cash_flow= financials["cash_flow"]
-    balance_sheet= financials["balance_sheet"]
+    balance_sheet = financials["balance_sheet"]
 
-    growth_rates=assumptions["growth_rates"]
+    growth_rates = assumptions["growth_rates"]
     discount_rate = assumptions["discount_rate"]
     terminal_growth = assumptions["terminal_growth"]
+    fcf_margin = assumptions["fcf_margin"]
 
-    enterprise_value= market_data["enterprise_value"]
-    shares_outstanding = market_data["shares_outstanding"]
-    
+    if discount_rate <= terminal_growth:
+        raise ValueError(
+            "discount_rate must be greater than terminal_growth."
+        )
 
-    latest_revenue = income_statement.loc["TotalRevenue"].dropna().iloc[0]
-    latest_free_cash_flow = cash_flow.loc["FreeCashFlow"].dropna().iloc[0]
-    cash=balance_sheet.loc["CashAndCashEquivalents"].dropna().iloc[0]
-    debt=balance_sheet.loc["TotalDebt"].dropna().iloc[0]
-
-
-    fcf_margin = latest_free_cash_flow/latest_revenue
-
-    projected_revenue=project_revenue(latest_revenue=latest_revenue, growth_rates= growth_rates)
-
-    projected_fcf= project_fcf_from_margin(projected_revenue=projected_revenue, fcf_margin= fcf_margin)
-
-    discounted_fcf=discount_cash_flows(cash_flows= projected_fcf, discount_rate= discount_rate)
-
-    terminal_value= calculate_terminal_value(final_year_fcf= projected_fcf[-1], discount_rate= discount_rate, terminal_growth= terminal_growth)
-
-    number_of_year = len(projected_fcf)
-
-    discounted_terminal_value = terminal_value / ((1 + discount_rate) ** number_of_year)
-
-    equity_value = calculate_equity_value(enterprise_value= enterprise_value, cash= cash, debt= debt)
-
-    fair_value_per_share = calculate_fair_value_per_share(equity_value=equity_value, shares_outstanding=shares_outstanding)
-
-    dcf_sensitivity_table = create_dcf_sensitivity_table(
-        base_fcf=latest_free_cash_flow,
-        shares_outstanding=shares_outstanding,
-        discount_rates= [0.08, 0.09, 0.10, 0.11, 0.12],
-        terminal_growth_rates= [0.02, 0.025, 0.03, 0.035, 0.04]
+    latest_revenue = latest_value(
+        income_statement.loc["TotalRevenue"]
     )
 
+    cash = latest_value(
+        balance_sheet.loc["CashAndCashEquivalents"]
+    )
+
+    debt = latest_value(
+        balance_sheet.loc["TotalDebt"]
+    )
+
+    shares_outstanding = market_data["shares_outstanding"]
+
+    diluted_average_shares = latest_value(income_statement.loc["DilutedAverageShares"])
 
 
-    #We only want fair_value_per_share, but the rest are important for the AI Agent to explain the results
-    result ={
+    projected_revenue = project_revenue(
+        latest_revenue=latest_revenue,
+        growth_rates=growth_rates,
+    )
+
+    projected_fcf = project_fcf_from_margin(
+        projected_revenue=projected_revenue,
+        fcf_margin=fcf_margin,
+    )
+
+    discounted_fcf = discount_cash_flows(
+        cash_flows=projected_fcf,
+        discount_rate=discount_rate,
+    )
+
+    terminal_value = calculate_terminal_value(
+        final_year_fcf=projected_fcf[-1],
+        discount_rate=discount_rate,
+        terminal_growth=terminal_growth,
+    )
+
+    projection_years = len(projected_fcf)
+
+    discounted_terminal_value = (
+        terminal_value
+        / ((1 + discount_rate) ** projection_years)
+    )
+
+    enterprise_value = calculate_enterprise_value(
+        discounted_fcf=discounted_fcf,
+        discounted_terminal_value=discounted_terminal_value,
+    )
+
+    equity_value = calculate_equity_value(
+        enterprise_value=enterprise_value,
+        cash=cash,
+        debt=debt,
+    )
+
+    fair_value_per_share = calculate_fair_value_per_share(
+        equity_value=equity_value,
+        shares_outstanding=shares_outstanding,
+        diluted_average_shares=diluted_average_shares,
+    )
+
+    dcf_sensitivity_table = create_dcf_sensitivity_table(
+        projected_fcf=projected_fcf,
+        cash=cash,
+        debt=debt,
+        shares_outstanding=shares_outstanding,
+        diluted_average_shares=diluted_average_shares,
+        discount_rates=[0.08, 0.09, 0.10, 0.11, 0.12],
+        terminal_growth_rates=[0.02, 0.025, 0.03, 0.035, 0.04]
+    )
+
+    return {
         "fair_value_per_share": fair_value_per_share,
         "enterprise_value": enterprise_value,
         "equity_value": equity_value,
@@ -203,11 +265,8 @@ def run_dcf(financials, market_data, assumptions) -> dict:
         "terminal_value": terminal_value,
         "discounted_terminal_value": discounted_terminal_value,
         "assumptions": assumptions,
-        "dcf_sensitivity_table": dcf_sensitivity_table
+        "dcf_sensitivity_table": dcf_sensitivity_table,
     }
-
-    return result
-
 
 def run_dcf_scenarios(financials: dict, market_data: dict) -> dict:
     """

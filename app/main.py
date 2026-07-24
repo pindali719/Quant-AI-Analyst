@@ -61,8 +61,8 @@ def run_analysis(ticker: str):
     print("Calculating valuation metrics...")
     valuation_metrics = calculate_valuation_metrics(
         company_info=company_info,
-        income_statement=income_statement,
-        cash_flow=cash_flow,
+        quarterly_income_statement=financial_data["quarterly_income_statement"],
+        quarterly_cash_flow= financial_data["quarterly_cash_flow"]
     )
 
 

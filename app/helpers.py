@@ -35,3 +35,30 @@ def safe_division(numerator: float, denominator: float):
     
     
     return numerator/denominator
+
+def ttm_value(
+    statement: pd.DataFrame,
+    row_name: str,
+) -> float | None:
+    """
+    Sum the latest four available quarterly values.
+
+    Use this only for flow measures such as revenue,
+    net income, EBITDA, and free cash flow.
+    """
+
+    if row_name not in statement.index:
+        return None
+
+    values = pd.to_numeric(
+        statement.loc[row_name],
+        errors="coerce",
+    ).dropna()
+
+    if len(values) < 4:
+        return None
+
+    # Statement columns contain reporting dates.
+    values = values.sort_index(ascending=False)
+
+    return float(values.iloc[:4].sum())

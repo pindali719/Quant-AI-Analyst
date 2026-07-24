@@ -231,7 +231,7 @@ def plot_peer_valuation(peer_df: pd.DataFrame, ticker: str) -> str:
     if chart_df.empty:
         raise ValueError("No valuation data available to plot.")
     
-    file_path = CHARTS_DIR / f"{ticker}_dcf_sensitivity.png"
+    file_path = CHARTS_DIR / f"{ticker}_peer_valuation.png"
 
     ax = chart_df.plot(kind="bar", figsize=(10, 6))
 
