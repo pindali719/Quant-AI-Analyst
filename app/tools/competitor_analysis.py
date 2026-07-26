@@ -4,44 +4,49 @@ import pandas as pd
 from app.constants import DEFAULT_PEERS
 from app.tools.financial_data import fetch_all_financial_data
 from app.analysis.metrics import calculate_all_metrics
-from app.helpers import latest_value, safe_division, ttm_value
+from app.helpers import latest_value, safe_division, ttm_value, is_missing, ratio_or_none, latest_statement_value
 
 def get_default_peers(ticker: str) -> list[str]:
 
-    peers= DEFAULT_PEERS[ticker]
+    peers= list(DEFAULT_PEERS[ticker])
 
     return peers
 
-def calculate_multiples(market_cap: float, net_income_ttm: float, revenue_ttm: float, enterprise_value: float, ebitda_ttm: float) -> dict:
+def calculate_multiples(
+    market_cap: float | None,
+    net_income_ttm: float | None,
+    revenue_ttm: float | None,
+    enterprise_value: float | None,
+    ebitda_ttm: float | None,
+) -> dict:
 
-    if market_cap is not None and net_income_ttm is not None and net_income_ttm > 0:
-        pe_ratio = market_cap / net_income_ttm
-    else:
-        pe_ratio = None
+    pe_ratio = ratio_or_none(
+        numerator=market_cap,
+        denominator=net_income_ttm,
+    )
 
-    if market_cap is not None and revenue_ttm is not None and revenue_ttm > 0:
-        ps_ratio = market_cap / revenue_ttm
-    else:
-        ps_ratio = None
+    ps_ratio = ratio_or_none(
+        numerator=market_cap,
+        denominator=revenue_ttm,
+    )
 
-
-    if enterprise_value is not None and ebitda_ttm is not None and ebitda_ttm > 0:
-        ev_to_ebitda = enterprise_value / ebitda_ttm
-    else:
-        ev_to_ebitda = None
+    ev_to_ebitda = ratio_or_none(
+        numerator=enterprise_value,
+        denominator=ebitda_ttm,
+    )
 
     return {
         "pe_ratio": pe_ratio,
         "ps_ratio": ps_ratio,
-        "ev_to_ebida": ev_to_ebitda,
+        "ev_to_ebitda": ev_to_ebitda,
     }
 
 def calculate_fcf_yield(free_cash_flow_ttm: float, market_cap: float) -> float:
 
-    if free_cash_flow_ttm is not None and market_cap is not None and market_cap > 0:
-        fcf_yield = free_cash_flow_ttm / market_cap
-    else:
-        fcf_yield = None
+    fcf_yield = ratio_or_none(
+        numerator=free_cash_flow_ttm,
+        denominator=market_cap,
+    )
 
     return fcf_yield
 
@@ -57,102 +62,359 @@ def calculate_leverage(debt: float, stockholders_equity: float) -> float:
 
 def get_enterprise_value(peer_profile: dict, market_cap: float, debt: float, cash: float) -> float:
 
+    """
+    Return Yahoo Finance's current enterprise value when available.
+
+    Otherwise, approximate current enterprise value using:
+    current market cap + latest-quarter debt - latest-quarter cash.
+    """
+
     enterprise_value = peer_profile.get("enterpriseValue")
 
-    if enterprise_value is None and None not in (market_cap, debt, cash):
+    if not is_missing(enterprise_value):
+        return float(enterprise_value)
 
-        enterprise_value = market_cap + debt - cash
+    if any(is_missing(value) for value in (market_cap, debt, cash)):
+        return None
 
-    return enterprise_value
+    return float(market_cap + debt - cash)
 
-def fetch_metrics(tickers: list[str], target_ticker: str) -> pd.DataFrame:
+def fetch_metrics(
+    tickers: list[str],
+    target_ticker: str,
+    target_financial_data: dict | None = None,
+) -> pd.DataFrame:
+    """
+    Calculate period-consistent metrics for the target and peers.
 
-    all_metrics= []
+    Period conventions:
+    - Revenue growth: latest fiscal year
+    - Margins: trailing twelve months
+    - ROE and ROIC: TTM numerator / latest-quarter capital
+    - Cash, debt, equity and liquidity: latest quarter
+    - Valuation: current market values / TTM fundamentals
+    """
 
-    tickers.append(target_ticker)
-    
+    target_ticker = target_ticker.upper()
+
+    tickers_to_fetch = [target_ticker]
+
     for ticker in tickers:
+        ticker = ticker.upper()
+
+        if ticker not in tickers_to_fetch:
+            tickers_to_fetch.append(ticker)
+
+    all_metrics = []
+
+    for ticker in tickers_to_fetch:
         try:
+            # Reuse the target data already fetched in main.py.
+            if (
+                ticker == target_ticker
+                and target_financial_data is not None
+            ):
+                financial_data = target_financial_data
+            else:
+                financial_data = fetch_all_financial_data(
+                    ticker=ticker
+                )
 
-            peer_profile= all_financial_data.get("company_info")
-            all_financial_data = fetch_all_financial_data(ticker= ticker)
-            annual_income_statement = all_financial_data.get("income_statement")
-            annual_cash_flow = all_financial_data.get("cash_flow")
-            annual_balance_sheet = all_financial_data.get("balance_sheet")
-            metrics_of_ticker = calculate_all_metrics(
-                income_statement= annual_income_statement,
-                cash_flow= annual_cash_flow,
-                balance_sheet= annual_balance_sheet)
+            peer_profile = financial_data["company_info"]
 
-            
-            revenue_growth = latest_value(metrics_of_ticker.loc["revenue_growth"])
-            gross_margin = latest_value(metrics_of_ticker.loc["gross_margin"])
-            operating_margin= latest_value(metrics_of_ticker.loc["operating_margin"])
-            net_margin = latest_value(metrics_of_ticker.loc["net_margin"])
+            annual_income_statement = financial_data[
+                "income_statement"
+            ]
+            annual_cash_flow = financial_data["cash_flow"]
+            annual_balance_sheet = financial_data[
+                "balance_sheet"
+            ]
 
-            quarterly_income_statement = all_financial_data["quarterly_income_statement"]
+            quarterly_income_statement = financial_data[
+                "quarterly_income_statement"
+            ]
+            quarterly_cash_flow = financial_data[
+                "quarterly_cash_flow"
+            ]
+            quarterly_balance_sheet = financial_data[
+                "quarterly_balance_sheet"
+            ]
 
-            quarterly_cash_flow = all_financial_data["quarterly_cash_flow"]
+            # -------------------------------------------------
+            # Latest fiscal-year growth
+            # -------------------------------------------------
 
-            quarterly_balance_sheet = all_financial_data["quarterly_balance_sheet"]
+            annual_metrics = calculate_all_metrics(
+                income_statement=annual_income_statement,
+                cash_flow=annual_cash_flow,
+                balance_sheet=annual_balance_sheet,
+            )
 
+            latest_fy_revenue_growth = latest_value(
+                annual_metrics.loc["revenue_growth"]
+            )
 
-            net_income_ttm = ttm_value(quarterly_income_statement, "NetIncome")
-            revenue_ttm = ttm_value(quarterly_income_statement, "TotalRevenue")
-            ebitda_ttm = ttm_value(quarterly_income_statement,"EBITDA")
-            free_cash_flow_ttm = ttm_value(quarterly_cash_flow, "FreeCashFlow")
+            # -------------------------------------------------
+            # TTM income-statement and cash-flow values
+            # -------------------------------------------------
+
+            revenue_ttm = ttm_value(
+                quarterly_income_statement,
+                "TotalRevenue",
+            )
+
+            gross_profit_ttm = ttm_value(
+                quarterly_income_statement,
+                "GrossProfit",
+            )
+
+            operating_income_ttm = ttm_value(
+                quarterly_income_statement,
+                "OperatingIncome",
+            )
+
+            net_income_ttm = ttm_value(
+                quarterly_income_statement,
+                "NetIncome",
+            )
+
+            pretax_income_ttm = ttm_value(
+                quarterly_income_statement,
+                "PretaxIncome",
+            )
+
+            tax_provision_ttm = ttm_value(
+                quarterly_income_statement,
+                "TaxProvision",
+            )
+
+            ebitda_ttm = ttm_value(
+                quarterly_income_statement,
+                "EBITDA",
+            )
+
+            free_cash_flow_ttm = ttm_value(
+                quarterly_cash_flow,
+                "FreeCashFlow",
+            )
+
+            # -------------------------------------------------
+            # TTM margins
+            # -------------------------------------------------
+
+            ttm_gross_margin = ratio_or_none(
+                numerator=gross_profit_ttm,
+                denominator=revenue_ttm,
+            )
+
+            ttm_operating_margin = ratio_or_none(
+                numerator=operating_income_ttm,
+                denominator=revenue_ttm,
+            )
+
+            ttm_net_margin = ratio_or_none(
+                numerator=net_income_ttm,
+                denominator=revenue_ttm,
+            )
+
+            # -------------------------------------------------
+            # Latest-quarter balance-sheet values
+            # -------------------------------------------------
+
+            cash = latest_statement_value(
+                quarterly_balance_sheet,
+                "CashAndCashEquivalents",
+            )
+
+            debt = latest_statement_value(
+                quarterly_balance_sheet,
+                "TotalDebt",
+            )
+
+            stockholders_equity = latest_statement_value(
+                quarterly_balance_sheet,
+                "StockholdersEquity",
+            )
+
+            current_assets = latest_statement_value(
+                quarterly_balance_sheet,
+                "CurrentAssets",
+            )
+
+            current_liabilities = latest_statement_value(
+                quarterly_balance_sheet,
+                "CurrentLiabilities",
+            )
+
+            latest_q_leverage = ratio_or_none(
+                numerator=debt,
+                denominator=stockholders_equity,
+            )
+
+            latest_q_current_ratio = ratio_or_none(
+                numerator=current_assets,
+                denominator=current_liabilities,
+            )
+
+            # -------------------------------------------------
+            # Approximate TTM ROE
+            #
+            # -------------------------------------------------
+
+            approx_ttm_roe = ratio_or_none(
+                numerator=net_income_ttm,
+                denominator=stockholders_equity,
+            )
+
+            # -------------------------------------------------
+            # Approximate TTM ROIC
+            #
+            # NOPAT = TTM operating income × (1 - tax rate)
+            # Invested capital = latest equity + debt - cash
+            # -------------------------------------------------
+
+            effective_tax_rate = ratio_or_none(
+                numerator=tax_provision_ttm,
+                denominator=pretax_income_ttm,
+            )
+
+            #Tax rate between 0 and 0.50, since any other value is suspicious, and likely wrong
+            if (
+                effective_tax_rate is not None
+                and 0 <= effective_tax_rate <= 0.50
+                and operating_income_ttm is not None
+            ):
+                nopat_ttm = (
+                    operating_income_ttm
+                    * (1 - effective_tax_rate)
+                )
+            else:
+                nopat_ttm = None
+
+            if not any(
+                is_missing(value)
+                for value in (
+                    stockholders_equity,
+                    debt,
+                    cash,
+                )
+            ):
+                invested_capital = (
+                    stockholders_equity
+                    + debt
+                    - cash
+                )
+            else:
+                invested_capital = None
+
+            approx_ttm_roic = ratio_or_none(
+                numerator=nopat_ttm,
+                denominator=invested_capital,
+            )
+
+            # -------------------------------------------------
+            # Current valuation
+            # -------------------------------------------------
+
             market_cap = peer_profile.get("marketCap")
 
-            cash = latest_value(quarterly_balance_sheet.loc["CashAndCashEquivalents"])
-            debt = latest_value(quarterly_balance_sheet.loc["TotalDebt"])
-            stockholders_equity = latest_value(quarterly_balance_sheet.loc["StockholdersEquity"])
-
-            enterprise_value = get_enterprise_value(peer_profile= peer_profile, market_cap= market_cap, debt= debt, cash= cash)
+            enterprise_value = get_enterprise_value(
+                peer_profile=peer_profile,
+                market_cap=market_cap,
+                debt=debt,
+                cash=cash,
+            )
 
             multiples = calculate_multiples(
-                market_cap= market_cap,
-                net_income_ttm= net_income_ttm,
-                revenue_ttm= revenue_ttm,
-                enterprise_value= enterprise_value, 
-                ebitda_ttm= ebitda_ttm,
-                )
-            
-            pe_ratio = multiples.get("pe_ratio")
-            ps_ratio = multiples.get("ps_ratio")
-            ev_to_ebitda = multiples.get("ev_to_ebitda")
+                market_cap=market_cap,
+                net_income_ttm=net_income_ttm,
+                revenue_ttm=revenue_ttm,
+                enterprise_value=enterprise_value,
+                ebitda_ttm=ebitda_ttm,
+            )
 
+            fcf_yield = calculate_fcf_yield(
+                free_cash_flow_ttm=free_cash_flow_ttm,
+                market_cap=market_cap,
+            )
 
-            fcf_yield = calculate_fcf_yield(free_cash_flow_ttm= free_cash_flow_ttm, market_cap= market_cap)
+            all_metrics.append(
+                {
+                    "ticker": ticker,
+                    "market_cap": market_cap,
 
-            leverage = calculate_leverage(debt= debt, stockholders_equity= stockholders_equity)
+                    # Latest fiscal year.
+                    "latest_fy_revenue_growth":
+                        latest_fy_revenue_growth,
 
-            metrics ={
-                "ticker": ticker,
-                "market_cap": market_cap,
-                "revenue_growth": revenue_growth,
-                "gross_margin": gross_margin,
-                "operating_margin": operating_margin,
-                "net_margin": net_margin,
-                "pe_ratio": pe_ratio,
-                "ps_ratio": ps_ratio,
-                "ev_to_ebitda": ev_to_ebitda,
-                "fcf_yield": fcf_yield,
-                "leverage": leverage
-            }
+                    # Trailing twelve months.
+                    "ttm_gross_margin":
+                        ttm_gross_margin,
+                    "ttm_operating_margin":
+                        ttm_operating_margin,
+                    "ttm_net_margin":
+                        ttm_net_margin,
+                    "approx_ttm_roe":
+                        approx_ttm_roe,
+                    "approx_ttm_roic":
+                        approx_ttm_roic,
 
-            all_metrics.append(metrics)
+                    # Latest reported quarter.
+                    "latest_q_cash": cash,
+                    "latest_q_debt": debt,
+                    "latest_q_equity":
+                        stockholders_equity,
+                    "latest_q_leverage":
+                        latest_q_leverage,
+                    "latest_q_current_ratio":
+                        latest_q_current_ratio,
 
+                    # Current valuation.
+                    "pe_ratio":
+                        multiples["pe_ratio"],
+                    "ps_ratio":
+                        multiples["ps_ratio"],
+                    "ev_to_ebitda":
+                        multiples["ev_to_ebitda"],
+                    "fcf_yield":
+                        fcf_yield,
+                }
+            )
 
         except Exception as error:
-            print(f"Skipping {ticker}: "f"{type(error).__name__}: {error}") 
-            raise
-    
-    all_metrics= pd.DataFrame(all_metrics).set_index("ticker")
-    
-    return all_metrics
+            # The target company is required.
+            if ticker == target_ticker:
+                raise RuntimeError(
+                    f"Could not calculate metrics for "
+                    f"{target_ticker}: {error}"
+                ) from error
+
+            # An unavailable peer should not abort the analysis.
+            print(
+                f"Skipping {ticker}: "
+                f"{type(error).__name__}: {error}"
+            )
+            continue
+
+    metrics_df = pd.DataFrame(all_metrics)
+
+    if metrics_df.empty:
+        raise ValueError(
+            "No valid company metrics were calculated."
+        )
+
+    metrics_df = metrics_df.set_index("ticker")
+
+    if target_ticker not in metrics_df.index:
+        raise ValueError(
+            f"Target ticker {target_ticker} is missing "
+            "from the metrics table."
+        )
+
+    return metrics_df
 
 
-def compare_metric(target_value: float, peer_median: float, tolerance=0.10) -> str:
+def compare_metric(target_value: float, peer_median: float, tolerance: float=0.10) -> str:
     """
     Compare a target metric against the peer median.
 
@@ -161,11 +423,17 @@ def compare_metric(target_value: float, peer_median: float, tolerance=0.10) -> s
     - interpretation: whether that is good/bad/in line
     """
 
-    if pd.isna(target_value) or pd.isna(peer_median) or peer_median == 0:
+    if (
+        is_missing(target_value)
+        or is_missing(peer_median)
+        or peer_median == 0
+    ):
         return "insufficient_data"
 
-    upper_bound = peer_median * (1 + tolerance)
-    lower_bound = peer_median * (1 - tolerance)
+    tolerance_amount = abs(peer_median) * tolerance
+
+    lower_bound = peer_median - tolerance_amount
+    upper_bound = peer_median + tolerance_amount
 
     if lower_bound <= target_value <= upper_bound:
         return "in_line"
@@ -176,46 +444,68 @@ def compare_metric(target_value: float, peer_median: float, tolerance=0.10) -> s
     return "below_peers"
     
 
-def evaluate_growth(target: pd.Series, peers: pd.DataFrame) -> str:
+def evaluate_growth(
+    target: pd.Series,
+    peers: pd.DataFrame,
+) -> dict:
 
-    target_revenue_growth = target["revenue_growth"]
-    peer_median_revenue_growth = peers["revenue_growth"].median()
+    metric_name = "latest_fy_revenue_growth"
 
-    result = {
-        "target_revenue_growth": target_revenue_growth,
-        "peer_median_revenue_growth": peer_median_revenue_growth,
-        "growth_comparison": compare_metric(target_value= target_revenue_growth, peer_median= peer_median_revenue_growth)
-        }
+    target_growth = target.get(metric_name)
+    peer_median_growth = peers[metric_name].median()
 
-    return result
+    return {
+        "target_revenue_growth": target_growth,
+        "peer_median_revenue_growth":
+            peer_median_growth,
+        "growth_comparison": compare_metric(
+            target_value=target_growth,
+            peer_median=peer_median_growth,
+        ),
+    }
 
 
-def evaluate_profitability(target: pd.Series, peers: pd.DataFrame):
-    margin_cols = ["gross_margin", "operating_margin", "net_margin"]
+def evaluate_profitability(
+    target: pd.Series,
+    peers: pd.DataFrame,
+) -> dict:
+
+    margin_columns = [
+        "ttm_gross_margin",
+        "ttm_operating_margin",
+        "ttm_net_margin",
+    ]
 
     details = {}
 
-    for col in margin_cols:
-        details[col] = compare_metric(
-            target[col],
-            peers[col].median()
+    for column in margin_columns:
+        details[column] = compare_metric(
+            target_value=target.get(column),
+            peer_median=peers[column].median(),
         )
 
-    above_count = sum(value == "above_peers" for value in details.values())
-    below_count = sum(value == "below_peers" for value in details.values())
+    above_count = sum(
+        result == "above_peers"
+        for result in details.values()
+    )
+
+    below_count = sum(
+        result == "below_peers"
+        for result in details.values()
+    )
 
     if above_count >= 2:
         overall = "above_peers"
     elif below_count >= 2:
         overall = "below_peers"
-    elif (above_count == below_count) and (above_count > 0):
+    elif above_count > 0 and below_count > 0:
         overall = "mixed"
     else:
         overall = "in_line"
 
     return {
         "margin_comparisons": details,
-        "profitability_comparison": overall
+        "profitability_comparison": overall,
     }
 
 def evaluate_valuation(target, peers):
@@ -357,15 +647,35 @@ def interpret_quality_adjusted_valuation(
 
     return "insufficient_data"
 
-def create_peer_comparison_table(target_metrics: pd.Series, peers_metrics: pd.DataFrame) -> pd.DataFrame:
+def create_peer_comparison_table(
+    target_metrics: pd.Series,
+    peers_metrics: pd.DataFrame,
+) -> pd.DataFrame:
 
-    """Create a table where target is being compared with peers. Specifically, the following metrics: market_cap, revenue_growth"""
+    comparison_table = pd.concat(
+        [
+            target_metrics.to_frame().T,
+            peers_metrics,
+        ]
+    )
 
-    comparison_table = pd.concat([target_metrics.to_frame().T, peers_metrics])
-    
-    comparison_table = comparison_table.loc[:, ["market_cap", "revenue_growth", "pe_ratio", "ps_ratio", "ev_to_ebitda", "fcf_yield"]]
+    columns = [
+        "market_cap",
+        "latest_fy_revenue_growth",
+        "ttm_gross_margin",
+        "ttm_operating_margin",
+        "ttm_net_margin",
+        "approx_ttm_roe",
+        "approx_ttm_roic",
+        "pe_ratio",
+        "ps_ratio",
+        "ev_to_ebitda",
+        "fcf_yield",
+        "latest_q_leverage",
+        "latest_q_current_ratio",
+    ]
 
-    return comparison_table
+    return comparison_table.loc[:, columns]
 
 def compare_against_peers(target_ticker: str, all_metrics: pd.DataFrame) -> dict:
 

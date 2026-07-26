@@ -2,14 +2,24 @@
 import pandas as pd
 
 from app.tools.financial_data import fetch_all_financial_data
-from app.helpers import latest_value, safe_division
+from app.helpers import latest_value, safe_division, is_missing
 from app.constants import SCORING_WEIGHTS
 
-def scoring(bounds: list[float], value: float, higher_better = True) -> int:
+def scoring(
+    bounds: list[float],
+    value: float | None,
+    higher_better: bool = True,
+) -> int:
+    """
+    Convert a metric into a score from 1 to 5.
 
-    """set bounds, and depending on whether higher values is better or not, give a score between 1 and 5"""
+    Missing data temporarily receives a neutral score of 3.
+    """
 
-    if higher_better == True:
+    if value is None or pd.isna(value):
+        return 3
+
+    if higher_better:
         if value >= bounds[0]:
             return 5
         if value >= bounds[1]:
@@ -18,26 +28,25 @@ def scoring(bounds: list[float], value: float, higher_better = True) -> int:
             return 3
         if value >= bounds[3]:
             return 2
-        if value < bounds[3]:
-            return 1
-    else:
-        if value <= bounds[0]:
-            return 5
-        if value <= bounds[1]:
-            return 4
-        if value <= bounds[2]:
-            return 3
-        if value <= bounds[3]:
-            return 2
-        if value > bounds[3]:
-            return 1
+        return 1
+
+    if value <= bounds[0]:
+        return 5
+    if value <= bounds[1]:
+        return 4
+    if value <= bounds[2]:
+        return 3
+    if value <= bounds[3]:
+        return 2
+
+    return 1
         
 
 
 
 def score_revenue_growth(metrics: pd.Series) -> int:
 
-    revenue_growth = metrics.get("revenue_growth")
+    revenue_growth = metrics.get("latest_fy_revenue_growth")
 
     bounds = [0.25, 0.15, 0.05, 0]
 
@@ -48,7 +57,11 @@ def score_revenue_growth(metrics: pd.Series) -> int:
 
 def score_single_margin(metrics:pd.Series, margin_type: str) -> int:
 
-    margin = metrics.get(margin_type)
+    metric_names = {
+        "gross_margin": "ttm_gross_margin",
+        "operating_margin": "ttm_operating_margin",
+        "net_margin": "ttm_net_margin",
+    }
 
     bounds_by_margin = {
         "gross_margin": [0.60, 0.40, 0.25, 0.10],
@@ -57,10 +70,14 @@ def score_single_margin(metrics:pd.Series, margin_type: str) -> int:
     }
 
 
-    if margin_type not in bounds_by_margin:
+    if margin_type not in metric_names:
         raise ValueError(f"Unsupported margin type: {margin_type}")
 
+    #Get the key of the margin, to fetch it from metrics
+    metric_name = metric_names[margin_type]
+    margin = metrics.get(metric_name)
 
+    
     bounds = bounds_by_margin.get(margin_type)
 
     score = scoring(bounds= bounds, value= margin)
@@ -79,148 +96,95 @@ def score_margin(metrics: pd.Series) -> float:
 
     return score
 
-def get_ROE(ticker: str) -> float:
+
+def score_ROE(metrics: pd.Series) -> int:
+
+    roe = metrics.get("approx_ttm_roe")
+
+    return scoring(
+        bounds=[0.30, 0.20, 0.10, 0.00],
+        value=roe,
+    )
 
 
-    all_financial_data = fetch_all_financial_data(ticker= ticker)
+def score_ROIC(metrics: pd.Series) -> int:
 
-    balance_sheet = all_financial_data.get("balance_sheet")
+    roic = metrics.get("approx_ttm_roic")
 
-    stockholder_equity = latest_value(balance_sheet.loc["StockholdersEquity"])
-
-    income_statement = all_financial_data.get("income_statement")
-
-    net_income = latest_value(income_statement.loc["NetIncome"])
-
-    roe = safe_division(numerator= net_income, denominator= stockholder_equity)
-
-    return roe
-
-def score_ROE(target_ticker: str) -> int:
-
-
-    roe = get_ROE(ticker= target_ticker)
-
-    if roe < 0:
-
-        #Neutral value, since negative roe caused by Stock-holder Equity can be missleading
-        return 3
-
-    bounds = [0.3, 0.2, 0.1, 0]
-
-    score = scoring(bounds= bounds, value= roe)
-
-    return score
-
-def get_ROIC(ticker: str) -> float:
-
-    
-    all_financial_data = fetch_all_financial_data(ticker= ticker)
-
-    income_statement = all_financial_data.get("income_statement")
-    balance_sheet = all_financial_data.get("balance_sheet")
-
-    #Computing NOPAT
-    operating_income = latest_value(income_statement.loc["OperatingIncome"])
-    tax_provision = latest_value(income_statement.loc["TaxProvision"])
-    pretax_income = latest_value(income_statement.loc["PretaxIncome"])
-
-    effective_tax_rate = safe_division(numerator= tax_provision, denominator= pretax_income)
-    
-    nopat = operating_income * (1-effective_tax_rate)
-
-    #Computing Invested Capital
-
-    stockholder_equity = latest_value(balance_sheet.loc["StockholdersEquity"])
-    debt = latest_value(balance_sheet.loc["TotalDebt"])
-    cash = latest_value(balance_sheet.loc["CashAndCashEquivalents"])
-
-    invested_capital = stockholder_equity + debt - cash
-
-    roic = safe_division(numerator= nopat, denominator= invested_capital)
-
-    return roic
-
-
-def score_ROIC(target_ticker: str) -> int:
-
-    roic = get_ROIC(ticker= target_ticker)
-
-    bounds = [0.20, 0.12, 0.08, 0.0]
-
-    score = scoring(bounds= bounds, value= roic)
-
-    return score
+    return scoring(
+        bounds=[0.20, 0.12, 0.08, 0.00],
+        value=roic,
+    )
     
 
-def score_profitability(metrics: pd.Series, target_ticker: str) -> int:
+def score_profitability(
+    metrics: pd.Series,
+) -> int:
 
-    margin_score = score_margin(metrics= metrics)
+    margin_score = score_margin(metrics)
+    roe_score = score_ROE(metrics)
+    roic_score = score_ROIC(metrics)
 
-    roe_score = score_ROE(target_ticker = target_ticker)
-
-    roic_score = score_ROIC(target_ticker = target_ticker)
-
-    final_score = 0.5 * margin_score + 0.3 * roic_score + 0.2* roe_score
-
-    final_score = round(final_score)
-
-    return final_score
+    final_score = (
+        0.50 * margin_score
+        + 0.30 * roic_score
+        + 0.20 * roe_score
+    )
+  
+    return round(final_score)
 
 
 
-def score_leverage(metrics: pd.Series, target_ticker: str) -> int:
-    
-    #Edge case: if net cash is greater than debt
+def score_leverage(
+    metrics: pd.Series,
+) -> int:
 
-    all_financial_data = fetch_all_financial_data(ticker= target_ticker)
+    cash = metrics.get("latest_q_cash")
+    debt = metrics.get("latest_q_debt")
+    equity = metrics.get("latest_q_equity")
+    leverage = metrics.get("latest_q_leverage")
 
-    balance_sheet = all_financial_data.get("balance_sheet")
-
-    cash = latest_value(balance_sheet.loc["CashAndCashEquivalents"])
-    debt = latest_value(balance_sheet.loc["TotalDebt"])
-
-    if cash > debt:
+    # Strong net-cash position.
+    if (
+        cash is not None
+        and debt is not None
+        and not pd.isna(cash)
+        and not pd.isna(debt)
+        and cash > debt
+    ):
         return 5
-    #Edge case: if Stockholder's equity is negative. It can be missleading, so return 3 (neutral)
 
-    stockholders_equity = latest_value(balance_sheet.loc["StockholdersEquity"])
-
-    if stockholders_equity < 0:
+    # Debt-to-equity is not meaningful with negative equity.
+    if (
+        equity is not None
+        and not pd.isna(equity)
+        and equity < 0
+    ):
         return 3
 
-    #Other cases
+    return scoring(
+        bounds=[0.30, 0.70, 1.50, 3.00],
+        value=leverage,
+        higher_better=False,
+    )
 
-    leverage = metrics.get("leverage")
+def score_liquidity(
+    metrics: pd.Series,
+) -> int:
 
-    bounds = [0.3, 0.7, 1.5, 3.0]
+    current_ratio = metrics.get(
+        "latest_q_current_ratio"
+    )
 
-    score = scoring(bounds= bounds, value= leverage, higher_better = False)
+    return scoring(
+        bounds=[2.00, 1.50, 1.00, 0.70],
+        value=current_ratio,
+    )
 
-    return score
+def score_balance_sheet(metrics: pd.Series) -> int:
 
-def score_liquidity(target_ticker: str) -> int:
-
-
-    all_financial_data = fetch_all_financial_data(ticker= target_ticker)
-
-    balance_sheet = all_financial_data.get("balance_sheet")
-
-    current_assets=latest_value(balance_sheet.loc["CurrentAssets"])
-    current_liabilities = latest_value(balance_sheet.loc["CurrentLiabilities"])
-
-    current_ratio = safe_division(numerator= current_assets, denominator= current_liabilities)
-
-    bounds = [2.0, 1.5, 1.0, 0.7]
-
-    score = scoring(bounds= bounds, value= current_ratio)
-
-    return score
-
-def score_balance_sheet(metrics: pd.Series, target_ticker: str) -> int:
-
-    leverage_score = score_leverage(metrics= metrics, target_ticker= target_ticker)
-    liquidity_score = score_liquidity(target_ticker= target_ticker)
+    leverage_score = score_leverage(metrics= metrics)
+    liquidity_score = score_liquidity(metrics= metrics)
 
     balance_sheet_score =   0.6*leverage_score + 0.4*liquidity_score
 
@@ -230,67 +194,122 @@ def score_balance_sheet(metrics: pd.Series, target_ticker: str) -> int:
 
 
 
-def score_multiples(target_ticker: str, all_metrics: pd.DataFrame) -> int:
+def score_multiples(
+    target_ticker: str,
+    all_metrics: pd.DataFrame,
+) -> int:
 
     target = all_metrics.loc[target_ticker]
+    peers = all_metrics.drop(index=target_ticker)
 
-    peers = all_metrics.drop(index= target_ticker)
-
-    target_pe_ratio = target["pe_ratio"]
-    target_ps_ratio = target["ps_ratio"]
-    target_ev_to_ebitda = target["ev_to_ebitda"]
-
-    peer_median_pe_ratio = peers["pe_ratio"].median()
-    peer_median_ps_ratio = peers["ps_ratio"].median()
-    peer_median_ev_to_ebitda = peers["ev_to_ebitda"].median()
-
-    relative_pe_ratio = safe_division(numerator=target_pe_ratio, denominator=peer_median_pe_ratio)
-    relative_ps_ratio = safe_division(numerator=target_ps_ratio, denominator=peer_median_ps_ratio)
-    relative_ev_to_ebitda = safe_division(numerator=target_ev_to_ebitda, denominator=peer_median_ev_to_ebitda)
+    multiple_columns = [
+        "pe_ratio",
+        "ps_ratio",
+        "ev_to_ebitda",
+    ]
 
     bounds = [0.75, 0.90, 1.10, 1.50]
 
-    score_relative_pe_ratio = scoring(bounds= bounds, value= relative_pe_ratio, higher_better= False)
-    score_relative_ps_ratio = scoring(bounds= bounds, value= relative_ps_ratio, higher_better= False)
-    score_relative_ev_to_ebitda = scoring(bounds= bounds, value= relative_ev_to_ebitda, higher_better= False)
+    individual_scores = []
 
-    average_score = (score_relative_pe_ratio + score_relative_ps_ratio + score_relative_ev_to_ebitda)/3
+    for column in multiple_columns:
+        target_value = target.get(column)
 
-    multiples_score = round(average_score)
+        #A pd.Series with only peers with a valid value
+        valid_peer_values = pd.to_numeric(
+            peers[column],
+            errors="coerce",
+        ).dropna()
 
-    return multiples_score
+        if is_missing(target_value):
+            continue
+
+        if valid_peer_values.empty:
+            continue
+
+        peer_median = valid_peer_values.median()
+
+        if peer_median <= 0:
+            continue
+
+        relative_multiple = target_value / peer_median
+
+        individual_scores.append(
+            scoring(
+                bounds=bounds,
+                value=relative_multiple,
+                higher_better=False,
+            )
+        )
+
+    if not individual_scores:
+        return 3
+
+    return round(
+        sum(individual_scores)
+        / len(individual_scores)
+    )
 
 
-def score_fcf_yield(target_ticker: str, all_metrics: pd.DataFrame) -> int:
+def score_fcf_yield(
+    target_ticker: str,
+    all_metrics: pd.DataFrame,
+) -> int:
 
     target = all_metrics.loc[target_ticker]
+    peers = all_metrics.drop(index=target_ticker)
 
-    peers = all_metrics.drop(index= target_ticker)
+    target_fcf_yield = target.get("fcf_yield")
 
-    target_fcf_yield = target["fcf_yield"]
-    peer_median_fcf_yield = peers["fcf_yield"].median()
-    
-    relative_fcf_yield = safe_division(numerator=target_fcf_yield, denominator = peer_median_fcf_yield)
+    peer_fcf_yields = pd.to_numeric(
+        peers["fcf_yield"],
+        errors="coerce",
+    ).dropna()
 
-    bounds = [1.50, 1.10, 0.90, 0.50]
+    if (
+        is_missing(target_fcf_yield)
+        or peer_fcf_yields.empty
+    ):
+        return 3
 
-    score = scoring(bounds= bounds, value= relative_fcf_yield)
+    peer_median_fcf_yield = peer_fcf_yields.median()
 
-    return score
+    if peer_median_fcf_yield <= 0:
+        return 3
 
-def score_dcf_upside(fair_value_per_share: float, current_price: float) -> int:
+    relative_fcf_yield = (
+        target_fcf_yield
+        / peer_median_fcf_yield
+    )
 
-    dcf_upside = safe_division(numerator= (fair_value_per_share - current_price), denominator= current_price)
+    return scoring(
+        bounds=[1.50, 1.10, 0.90, 0.50],
+        value=relative_fcf_yield,
+    )
 
-    bounds = [0.30, 0.10, -0.10, -0.30]
+def score_dcf_upside(
+    fair_value_per_share: float,
+    current_price: float,
+) -> int:
 
-    score = scoring(bounds= bounds, value= dcf_upside)
+    if (
+        is_missing(fair_value_per_share)
+        or is_missing(current_price)
+        or current_price <= 0
+    ):
+        return 3
 
-    return score
+    dcf_upside = (
+        fair_value_per_share - current_price
+    ) / current_price
+
+    return scoring(
+        bounds=[0.30, 0.10, -0.10, -0.30],
+        value=dcf_upside,
+    )
 
 def score_valuation(target_ticker: str, all_metrics: pd.DataFrame, fair_value_per_share: float, current_price: float) -> int:
 
-    target_metrics = all_metrics.loc[target_ticker]
     
     multiples_score = score_multiples(target_ticker= target_ticker, all_metrics= all_metrics)
     fcf_yield_score = score_fcf_yield(target_ticker= target_ticker, all_metrics= all_metrics)
@@ -361,8 +380,8 @@ def generate_scorecard(risks: dict, target_ticker: str, all_metrics: pd.DataFram
     metrics = all_metrics.loc[target_ticker]
 
     growth_score = score_revenue_growth(metrics= metrics)
-    profitability_score = score_profitability(metrics= metrics, target_ticker= target_ticker)
-    balance_sheet_score = score_balance_sheet(metrics= metrics, target_ticker= target_ticker)
+    profitability_score = score_profitability(metrics= metrics)
+    balance_sheet_score = score_balance_sheet(metrics= metrics)
     valuation_score = score_valuation(target_ticker=target_ticker, all_metrics= all_metrics, fair_value_per_share= fair_value_per_share, current_price= current_price)
     risk_score = score_risk(risks=risks)
 

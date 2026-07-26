@@ -78,9 +78,8 @@ def run_analysis(ticker: str):
     }
 
     financials = {
-        "income_statement": income_statement,
-        "balance_sheet": balance_sheet,
-        "cash_flow": cash_flow,
+        "quarterly_income_statement": financial_data["quarterly_income_statement"],
+        "quarterly_balance_sheet": financial_data["quarterly_balance_sheet"],
     }
 
     dcf_scenarios = run_dcf_scenarios(financials= financials, market_data= market_data)
@@ -94,7 +93,7 @@ def run_analysis(ticker: str):
     print("Analysing competitors...")
 
     peers = get_default_peers(ticker= ticker)
-    all_metrics = fetch_metrics(tickers= peers, target_ticker= ticker)
+    all_metrics = fetch_metrics(tickers= peers, target_ticker= ticker, target_financial_data= financial_data)
     comparison_with_peers = compare_against_peers(target_ticker= ticker, all_metrics= all_metrics)
 
     # 6. Scoring

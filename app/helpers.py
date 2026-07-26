@@ -62,3 +62,41 @@ def ttm_value(
     values = values.sort_index(ascending=False)
 
     return float(values.iloc[:4].sum())
+
+def is_missing(value) -> bool:
+    """Return True when a scalar value is missing."""
+
+    return value is None or pd.isna(value)
+
+
+def ratio_or_none(
+    numerator: float | None,
+    denominator: float | None,
+) -> float | None:
+    """
+    Divide two values when both are available and the denominator
+    is positive.
+
+    A negative numerator is allowed. This is important for margins,
+    ROE, and ROIC when the company is loss-making.
+    """
+
+    if is_missing(numerator) or is_missing(denominator):
+        return None
+
+    if denominator <= 0:
+        return None
+
+    return float(numerator / denominator)
+
+
+def latest_statement_value(
+    statement: pd.DataFrame,
+    row_name: str,
+) -> float | None:
+    """Return the latest available value from a statement row."""
+
+    if row_name not in statement.index:
+        return None
+
+    return latest_value(statement.loc[row_name])

@@ -29,6 +29,6 @@ def test_calculate_fcf_yield():
     free_cash_flow = 50
     market_cap = 1000
 
-    result = calculate_fcf_yield(free_cash_flow, market_cap)
+    result = calculate_fcf_yield(market_cap=market_cap, free_cash_flow_ttm=free_cash_flow)
 
-    assert result == pytest.approx(0.05)
+    assert result == pytest.approx(0.05) 

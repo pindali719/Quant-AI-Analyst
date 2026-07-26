@@ -1,7 +1,7 @@
 
 import pandas as pd
 from app.analysis.metrics import calculate_fcf_margin
-from app.helpers import latest_value
+from app.helpers import latest_value, ttm_value
 
 def project_revenue(latest_revenue: float, growth_rates: list[float]) -> list[float]:
 
@@ -170,8 +170,8 @@ def run_dcf(
     Free cash flow is projected using the scenario FCF margin.
     """
 
-    income_statement = financials["income_statement"]
-    balance_sheet = financials["balance_sheet"]
+    quarterly_income_statement = financials["quarterly_income_statement"]
+    quarterly_balance_sheet = financials["quarterly_balance_sheet"]
 
     growth_rates = assumptions["growth_rates"]
     discount_rate = assumptions["discount_rate"]
@@ -183,22 +183,35 @@ def run_dcf(
             "discount_rate must be greater than terminal_growth."
         )
 
-    latest_revenue = latest_value(
-        income_statement.loc["TotalRevenue"]
-    )
+    # Starting operating base: latest twelve months.
+    latest_revenue = ttm_value(
+        quarterly_income_statement,
+        "TotalRevenue",
+    )  
 
+    if latest_revenue is None or latest_revenue <= 0:
+        raise ValueError(
+            "At least four valid quarterly revenue values are required."
+        )
+
+    # Equity-value bridge: latest balance-sheet snapshot.
     cash = latest_value(
-        balance_sheet.loc["CashAndCashEquivalents"]
+        quarterly_balance_sheet.loc[
+            "CashAndCashEquivalents"
+        ]
     )
 
     debt = latest_value(
-        balance_sheet.loc["TotalDebt"]
+        quarterly_balance_sheet.loc["TotalDebt"]
     )
 
     shares_outstanding = market_data["shares_outstanding"]
 
-    diluted_average_shares = latest_value(income_statement.loc["DilutedAverageShares"])
-
+    diluted_average_shares = latest_value(
+        quarterly_income_statement.loc[
+            "DilutedAverageShares"
+        ]
+    )
 
     projected_revenue = project_revenue(
         latest_revenue=latest_revenue,

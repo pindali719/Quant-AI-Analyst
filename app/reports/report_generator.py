@@ -305,6 +305,14 @@ def generate_markdown_report(
 
 {recommendation}
 
+## Data and Period Methodology
+
+Historical financial trends use annual fiscal-year statements. Current
+valuation metrics use current market values and trailing-twelve-month
+income and cash-flow figures. Cash, debt, liquidity and shareholders'
+equity use the latest reported quarterly balance sheet. The DCF projects
+five future annual periods from the latest TTM revenue base.
+
 ## Disclaimer
 
 This project is for educational and research purposes only. It does not provide financial advice.
