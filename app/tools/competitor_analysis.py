@@ -280,9 +280,9 @@ def fetch_metrics(
 
             #Tax rate between 0 and 0.50, since any other value is suspicious, and likely wrong
             if (
-                effective_tax_rate is not None
+                is_missing(effective_tax_rate)
                 and 0 <= effective_tax_rate <= 0.50
-                and operating_income_ttm is not None
+                and is_missing(operating_income_ttm)
             ):
                 nopat_ttm = (
                     operating_income_ttm
@@ -354,6 +354,10 @@ def fetch_metrics(
                         ttm_operating_margin,
                     "ttm_net_margin":
                         ttm_net_margin,
+                    "ttm_net_income":
+                        net_income_ttm,
+                    "latest_q_equity":
+                        stockholders_equity,
                     "approx_ttm_roe":
                         approx_ttm_roe,
                     "approx_ttm_roic":
@@ -415,34 +419,50 @@ def fetch_metrics(
 
 
 def compare_metric(target_value: float, peer_median: float, tolerance: float=0.10) -> str:
-    """
-    Compare a target metric against the peer median.
 
-    Returns both:
-    - relative_position: whether the metric is numerically above/below peers
-    - interpretation: whether that is good/bad/in line
+    """
+    Compare a target metric with its peer median.
+
+    Returns:
+    - "above_peers"
+    - "below_peers"
+    - "in_line"
+    - "insufficient_data"
+
+    The tolerance is based on absolute relative distance, so it
+    works correctly with both positive and negative medians.
     """
 
     if (
         is_missing(target_value)
         or is_missing(peer_median)
-        or peer_median == 0
     ):
         return "insufficient_data"
 
-    tolerance_amount = abs(peer_median) * tolerance
+    # Relative comparison is not meaningful when the median is zero.
+    if peer_median == 0:
+        if target_value == 0:
+            return "in_line"
 
-    lower_bound = peer_median - tolerance_amount
-    upper_bound = peer_median + tolerance_amount
+        return (
+            "above_peers"
+            if target_value > 0
+            else "below_peers"
+        )
 
-    if lower_bound <= target_value <= upper_bound:
+    relative_distance = (
+        abs(target_value - peer_median)
+        / abs(peer_median)
+    )
+
+    if relative_distance <= tolerance:
         return "in_line"
 
     if target_value > peer_median:
         return "above_peers"
 
     return "below_peers"
-    
+
 
 def evaluate_growth(
     target: pd.Series,

@@ -100,8 +100,19 @@ def run_analysis(ticker: str):
     print("Scoring...")
 
     risks = None
+    sector_key = company_info.get("sector_key")
 
-    scorecard = generate_scorecard(risks= risks, target_ticker= ticker, all_metrics= all_metrics, fair_value_per_share= dcf_results.get("fair_value_per_share"), current_price= market_data.get("current_price"))
+    if sector_key == "financial-services":
+        scorecard = {
+            "supported": False,
+            "reason": (
+                "The general scorecard is not applicable to financial "
+                "companies. A bank- or insurer-specific model is required."
+            ),
+        }
+    else:
+        scorecard = generate_scorecard(risks= risks, target_ticker= ticker, all_metrics= all_metrics, fair_value_per_share= dcf_results.get("fair_value_per_share"), current_price= market_data.get("current_price"))
+
     peer_df = comparison_with_peers.get("peer_comparison_table")
 
     # 7. Generate charts

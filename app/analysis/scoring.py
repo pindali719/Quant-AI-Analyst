@@ -97,14 +97,40 @@ def score_margin(metrics: pd.Series) -> float:
     return score
 
 
-def score_ROE(metrics: pd.Series) -> int:
+def score_ROE(
+    metrics: pd.Series,
+) -> int | None:
+    """
+    Score approximate TTM ROE 
 
+    Returns None when ROE is not financially meaningful.
+    """
+
+    net_income = metrics.get("ttm_net_income")
+    equity = metrics.get("latest_q_equity")
     roe = metrics.get("approx_ttm_roe")
 
-    return scoring(
-        bounds=[0.30, 0.20, 0.10, 0.00],
-        value=roe,
-    )
+    if (
+        is_missing(net_income)
+        or is_missing(equity)
+    ):
+        return None
+
+    # Positive equity: ROE is economically meaningful.
+    if equity > 0:
+        return scoring(
+            bounds=[0.30, 0.20, 0.10, 0.00],
+            value=roe,
+        )
+
+    # Negative or zero equity makes conventional ROE unreliable.
+    if net_income > 0:
+        # The business is profitable, but ROE should not be used.
+        # Negative equity should be assessed in the balance-sheet score.
+        return None
+
+    # Losses combined with non-positive equity represent a weak condition.
+    return 1
 
 
 def score_ROIC(metrics: pd.Series) -> int:
@@ -120,53 +146,77 @@ def score_ROIC(metrics: pd.Series) -> int:
 def score_profitability(
     metrics: pd.Series,
 ) -> int:
+    """
+    Calculate profitability score using only meaningful available metrics.
+    """
 
-    margin_score = score_margin(metrics)
-    roe_score = score_ROE(metrics)
-    roic_score = score_ROIC(metrics)
+    component_scores = {
+        "margin": {
+            "score": score_margin(metrics),
+            "weight": 0.50,
+        },
+        "roic": {
+            "score": score_ROIC(metrics),
+            "weight": 0.30,
+        },
+        "roe": {
+            "score": score_ROE(metrics),
+            "weight": 0.20,
+        },
+    }
 
-    final_score = (
-        0.50 * margin_score
-        + 0.30 * roic_score
-        + 0.20 * roe_score
-    )
-  
-    return round(final_score)
+    weighted_total = 0.0
+    available_weight = 0.0
+
+    for component in component_scores.values():
+        score = component["score"]
+        weight = component["weight"]
+
+        if score is None:
+            continue
+
+        weighted_total += score * weight
+        available_weight += weight
+
+    if available_weight == 0:
+        raise ValueError(
+            "Profitability score cannot be calculated because "
+            "all profitability metrics are unavailable."
+        )
+
+    return round(weighted_total / available_weight)
 
 
 
 def score_leverage(
     metrics: pd.Series,
 ) -> int:
-
     cash = metrics.get("latest_q_cash")
     debt = metrics.get("latest_q_debt")
     equity = metrics.get("latest_q_equity")
     leverage = metrics.get("latest_q_leverage")
 
-    # Strong net-cash position.
+    if is_missing(equity):
+        return 3
+
+    if equity <= 0:
+        # Debt-to-equity is not meaningful.
+        # Negative equity requires a balance-sheet warning.
+        return 2
+
     if (
-        cash is not None
-        and debt is not None
-        and not pd.isna(cash)
-        and not pd.isna(debt)
+        is_missing(cash)
+        or is_missing(debt)
         and cash > debt
     ):
         return 5
-
-    # Debt-to-equity is not meaningful with negative equity.
-    if (
-        equity is not None
-        and not pd.isna(equity)
-        and equity < 0
-    ):
-        return 3
 
     return scoring(
         bounds=[0.30, 0.70, 1.50, 3.00],
         value=leverage,
         higher_better=False,
     )
+
 
 def score_liquidity(
     metrics: pd.Series,

@@ -13,3 +13,17 @@ SCORING_WEIGHTS = {
     "balance_sheet": 0.15,
     "risk": 0.10,
 }
+
+YAHOO_SECTOR_KEYS = {
+    "basic-materials",
+    "communication-services",
+    "consumer-cyclical",
+    "consumer-defensive",
+    "energy",
+    "financial-services",
+    "healthcare",
+    "industrials",
+    "real-estate",
+    "technology",
+    "utilities",
+}
