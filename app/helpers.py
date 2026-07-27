@@ -1,4 +1,5 @@
 import pandas as pd
+import math
 
 def latest_value(value):
     """
@@ -100,3 +101,16 @@ def latest_statement_value(
         return None
 
     return latest_value(statement.loc[row_name])
+
+def is_valid_number(value) -> bool:
+    """
+    Return True only for finite numeric scalar values.
+    """
+
+    if is_missing(value= value):
+        return False
+
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
