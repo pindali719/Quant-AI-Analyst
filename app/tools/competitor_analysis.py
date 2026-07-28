@@ -4,7 +4,7 @@ import pandas as pd
 from app.constants import DEFAULT_PEERS
 from app.tools.financial_data import fetch_all_financial_data
 from app.analysis.metrics import calculate_all_metrics
-from app.helpers import latest_value, safe_division, ttm_value, is_missing, ratio_or_none, latest_statement_value
+from app.helpers import latest_value, convert_to_usd, ttm_value, is_missing, ratio_or_none, latest_statement_value
 from app.analysis.valuation import calculate_ps_ratio, calculate_pe_ratio,  calculate_ev_to_ebitda
 
 def get_default_peers(ticker: str) -> list[str]:
@@ -124,6 +124,10 @@ def fetch_metrics(
 
             peer_profile = financial_data["company_info"]
 
+            quote_currency = peer_profile.get("currency")
+
+            financial_currency = peer_profile.get("financialCurrency")
+
             annual_income_statement = financial_data[
                 "income_statement"
             ]
@@ -165,6 +169,10 @@ def fetch_metrics(
                 "TotalRevenue",
             )
 
+            revenue_ttm = convert_to_usd(
+                revenue_ttm,
+                financial_currency)
+
             gross_profit_ttm = ttm_value(
                 quarterly_income_statement,
                 "GrossProfit",
@@ -179,6 +187,10 @@ def fetch_metrics(
                 quarterly_income_statement,
                 "NetIncome",
             )
+
+            net_income_ttm = convert_to_usd(
+                net_income_ttm,
+                financial_currency)
 
             pretax_income_ttm = ttm_value(
                 quarterly_income_statement,
@@ -195,10 +207,18 @@ def fetch_metrics(
                 "EBITDA",
             )
 
+            ebitda_ttm = convert_to_usd(
+                ebitda_ttm,
+                financial_currency)
+
             free_cash_flow_ttm = ttm_value(
                 quarterly_cash_flow,
                 "FreeCashFlow",
             )
+
+            free_cash_flow_ttm = convert_to_usd(
+                free_cash_flow_ttm,
+                financial_currency)
 
             # -------------------------------------------------
             # TTM margins
@@ -326,6 +346,11 @@ def fetch_metrics(
                 debt=debt,
                 cash=cash,
             )
+
+            #Convert the currency to USD if not already USD
+            market_cap = convert_to_usd(market_cap, quote_currency)
+
+            enterprise_value = convert_to_usd(enterprise_value, quote_currency)
 
             multiples = calculate_multiples(
                 market_cap=market_cap,

@@ -1,5 +1,6 @@
 import pandas as pd
 import math
+import yfinance as yf
 
 def latest_value(value):
     """
@@ -114,3 +115,53 @@ def is_valid_number(value) -> bool:
         return math.isfinite(float(value))
     except (TypeError, ValueError):
         return False
+
+
+def get_usd_exchange_rate(currency: str) -> float:
+    """
+    Return how many USD equal one unit of the given currency.
+
+    Examples:
+        USD -> 1.0
+        EUR -> approximately 1.14
+        TWD -> approximately 0.03
+    """
+
+    if currency == "USD":
+        return 1.0
+
+    currency_pair = f"{currency}USD=X"
+
+    exchange_rate_data = yf.Ticker(
+        currency_pair
+    ).history(period="5d")
+
+    if exchange_rate_data.empty:
+        raise ValueError(
+            f"Could not get exchange rate for "
+            f"{currency} to USD."
+        )
+
+    latest_rate = exchange_rate_data[
+        "Close"
+    ].dropna().iloc[-1]
+
+    return float(latest_rate)
+
+
+def convert_to_usd(
+    value: float | None,
+    currency: str,
+) -> float | None:
+    """
+    Convert one monetary value to USD.
+    """
+
+    if value is None:
+        return None
+
+    exchange_rate = get_usd_exchange_rate(
+        currency
+    )
+
+    return value * exchange_rate

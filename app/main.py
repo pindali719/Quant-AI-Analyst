@@ -100,20 +100,6 @@ def run_analysis(ticker: str):
 
     #---------------------------------------------------------
 
-   """ for index in all_metrics.index:
-        tick = yf.Ticker(index)
-
-        info = tick.get_info()
-        print(f"Ticker: {index}")
-        print("Quote currency:", info.get("currency"))
-        print("Financial currency:", info.get("financialCurrency"))
-        if index == "ASML":
-            print("Market cap:", all_metrics.loc["ASML"].iloc["market_cap"])
-            print("Debt:", all_metrics.loc["ASML"].iloc["debt"])
-            print("Cash:", all_metrics.loc["ASML"].iloc["cash"])
-            print("EBITDA:", all_metrics.loc["ASML"].iloc["ebitda"])
-
-        print("\n")"""
 
     
 
