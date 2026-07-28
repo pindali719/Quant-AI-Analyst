@@ -89,7 +89,7 @@ def fetch_company_info(ticker: str) -> dict:
     ticker_symbol= yf.Ticker(ticker)
     info = ticker_symbol.get_info()
 
-    fields=["longBusinessSummary", "sector", "industry", "marketCap", "exchange", "currency", "currentPrice", "enterpriseValue", "sharesOutstanding", "trailingPE", "sector", "sectorKey", "industry", "industryKey"]
+    fields=["longBusinessSummary", "sector", "industry", "marketCap", "exchange", "currency", "financialCurrency",  "currentPrice", "enterpriseValue", "sharesOutstanding", "trailingPE", "sector", "sectorKey", "industry", "industryKey"]
 
 
     return {

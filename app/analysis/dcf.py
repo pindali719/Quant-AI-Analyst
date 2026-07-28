@@ -325,7 +325,7 @@ def enter_assumption():
 
     while True:
         try:
-            print("--ASSUMPTIONS--\n1.bear\n2.base\n3,bull")
+            print("--ASSUMPTIONS--\n1.bear\n2.base\n3.bull")
             type_of_assumption = int(input("\nWhat kind of assumption are you making?\nAnswer: "))
             if ( (type_of_assumption < 1) or (3 < type_of_assumption)):
                 print("\nOut of range!!!")

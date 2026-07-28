@@ -5,6 +5,7 @@ from app.constants import DEFAULT_PEERS
 from app.tools.financial_data import fetch_all_financial_data
 from app.analysis.metrics import calculate_all_metrics
 from app.helpers import latest_value, safe_division, ttm_value, is_missing, ratio_or_none, latest_statement_value
+from app.analysis.valuation import calculate_ps_ratio, calculate_pe_ratio,  calculate_ev_to_ebitda
 
 def get_default_peers(ticker: str) -> list[str]:
 
@@ -20,20 +21,21 @@ def calculate_multiples(
     ebitda_ttm: float | None,
 ) -> dict:
 
-    pe_ratio = ratio_or_none(
-        numerator=market_cap,
-        denominator=net_income_ttm,
+    pe_ratio = calculate_pe_ratio(
+        market_cap=market_cap,
+        net_income_ttm=net_income_ttm,
     )
 
-    ps_ratio = ratio_or_none(
-        numerator=market_cap,
-        denominator=revenue_ttm,
+    ps_ratio = calculate_ps_ratio(
+        market_cap=market_cap,
+        revenue_ttm=revenue_ttm,
     )
 
-    ev_to_ebitda = ratio_or_none(
-        numerator=enterprise_value,
-        denominator=ebitda_ttm,
+    ev_to_ebitda = calculate_ev_to_ebitda(
+        enterprise_value=enterprise_value,
+        ebitda_ttm=ebitda_ttm,
     )
+
 
     return {
         "pe_ratio": pe_ratio,

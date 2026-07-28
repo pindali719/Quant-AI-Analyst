@@ -9,6 +9,8 @@ from app.analysis.dcf import run_dcf_scenarios, enter_assumption, get_dcf_scenar
 from app.tools.competitor_analysis import get_default_peers, fetch_metrics, compare_against_peers
 from app.analysis.scoring import generate_scorecard
 
+import yfinance as yf
+
 
 
 def parse_args():
@@ -96,6 +98,26 @@ def run_analysis(ticker: str):
     all_metrics = fetch_metrics(tickers= peers, target_ticker= ticker, target_financial_data= financial_data)
     comparison_with_peers = compare_against_peers(target_ticker= ticker, all_metrics= all_metrics)
 
+    #---------------------------------------------------------
+
+   """ for index in all_metrics.index:
+        tick = yf.Ticker(index)
+
+        info = tick.get_info()
+        print(f"Ticker: {index}")
+        print("Quote currency:", info.get("currency"))
+        print("Financial currency:", info.get("financialCurrency"))
+        if index == "ASML":
+            print("Market cap:", all_metrics.loc["ASML"].iloc["market_cap"])
+            print("Debt:", all_metrics.loc["ASML"].iloc["debt"])
+            print("Cash:", all_metrics.loc["ASML"].iloc["cash"])
+            print("EBITDA:", all_metrics.loc["ASML"].iloc["ebitda"])
+
+        print("\n")"""
+
+    
+
+    #---------------------------------------------------------
     # 6. Scoring
     print("Scoring...")
 
