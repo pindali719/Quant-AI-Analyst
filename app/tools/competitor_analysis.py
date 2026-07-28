@@ -280,9 +280,9 @@ def fetch_metrics(
 
             #Tax rate between 0 and 0.50, since any other value is suspicious, and likely wrong
             if (
-                is_missing(effective_tax_rate)
+                not is_missing(effective_tax_rate)
                 and 0 <= effective_tax_rate <= 0.50
-                and is_missing(operating_income_ttm)
+                and not is_missing(operating_income_ttm)
             ):
                 nopat_ttm = (
                     operating_income_ttm

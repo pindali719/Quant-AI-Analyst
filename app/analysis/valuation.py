@@ -1,5 +1,5 @@
 import pandas as pd
-from app.helpers import ttm_value, is_valid_number  
+from app.helpers import ttm_value, is_valid_number
 
 
 def calculate_pe_ratio(
@@ -129,10 +129,10 @@ def calculate_valuation_metrics(
     return {
         "pe_ratio": pe_ratio,
         "ps_ratio": ps_ratio,
+        "ev_to_ebitda": ev_to_ebitda,
         "fcf_yield": fcf_yield,
         "net_income_ttm": net_income_ttm,
         "revenue_ttm": revenue_ttm,
-        "ev_to_ebitda": ev_to_ebitda,
         "free_cash_flow_ttm": free_cash_flow_ttm,
         "valuation_basis": "Current market value / TTM fundamentals",
     }

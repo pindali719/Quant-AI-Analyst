@@ -113,3 +113,45 @@ def test_calculate_all_metrics_shape():
     assert 2024 in result.columns
     assert 2023 in result.columns
     assert 2022 in result.columns
+
+def test_metrics_align_by_year_when_columns_are_unordered():
+
+    income_statement = make_income_statement()
+    cash_flow = make_cash_flow()
+
+    income_statement = income_statement[
+        [
+            pd.Timestamp("2023-01-31"),
+            pd.Timestamp("2024-01-31"),
+            pd.Timestamp("2022-01-31"),
+        ]
+    ]
+
+    cash_flow = cash_flow[
+        [
+            pd.Timestamp("2022-01-31"),
+            pd.Timestamp("2024-01-31"),
+            pd.Timestamp("2023-01-31"),
+        ]
+    ]
+
+    result = calculate_all_metrics(
+        income_statement=income_statement,
+        cash_flow=cash_flow,
+        balance_sheet=pd.DataFrame(),
+    )
+
+    assert result.loc[
+        "revenue_growth",
+        2024,
+    ] == pytest.approx(0.50)
+
+    assert result.loc[
+        "gross_margin",
+        2024,
+    ] == pytest.approx(0.60)
+
+    assert result.loc[
+        "free_cash_flow",
+        2024,
+    ] == pytest.approx(80)

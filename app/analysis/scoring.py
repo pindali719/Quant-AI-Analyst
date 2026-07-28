@@ -196,17 +196,19 @@ def score_leverage(
     equity = metrics.get("latest_q_equity")
     leverage = metrics.get("latest_q_leverage")
 
-    if is_missing(equity):
+    if equity is None or pd.isna(equity):
         return 3
 
+    # Debt-to-equity is not meaningful with zero or negative equity.
     if equity <= 0:
-        # Debt-to-equity is not meaningful.
-        # Negative equity requires a balance-sheet warning.
         return 2
 
+    # A company with more cash than debt has a net-cash position.
     if (
-        is_missing(cash)
-        or is_missing(debt)
+        cash is not None
+        and debt is not None
+        and not pd.isna(cash)
+        and not pd.isna(debt)
         and cash > debt
     ):
         return 5

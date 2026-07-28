@@ -2,7 +2,7 @@ import pytest
 
 from app.analysis.valuation import (
     calculate_pe_ratio,
-    calculate_price_to_sales,
+    calculate_ps_ratio,
     calculate_fcf_yield,
 )
 
@@ -16,11 +16,11 @@ def test_calculate_pe_ratio():
     assert result == 10
 
 
-def test_calculate_price_to_sales():
+def test_calculate_ps_ratio():
     market_cap = 1000
     revenue = 250
 
-    result = calculate_price_to_sales(market_cap, revenue)
+    result = calculate_ps_ratio(market_cap, revenue)
 
     assert result == 4
 

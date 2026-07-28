@@ -19,21 +19,17 @@ from app.analysis.scoring import (
 )
 
 
-def generate_target_metrics():
-
+def generate_target_metrics() -> pd.Series:
     return pd.Series(
         {
             "ticker": "NVDA",
-
             "latest_fy_revenue_growth": 0.18,
-
             "ttm_gross_margin": 0.65,
             "ttm_operating_margin": 0.25,
             "ttm_net_margin": 0.10,
-
+            "ttm_net_income": 100.0,
             "approx_ttm_roe": 0.22,
             "approx_ttm_roic": 0.15,
-
             "latest_q_cash": 50.0,
             "latest_q_debt": 100.0,
             "latest_q_equity": 200.0,
@@ -213,33 +209,32 @@ def test_score_margin_calculates_weighted_score():
 
 
 def test_score_leverage_returns_five_when_company_has_net_cash():
+    metrics = generate_target_metrics().copy()
 
-    metrics = generate_target_metrics()
     metrics["latest_q_cash"] = 150.0
     metrics["latest_q_debt"] = 100.0
+    metrics["latest_q_equity"] = 200.0
+    metrics["latest_q_leverage"] = 0.50
 
-    assert score_leverage(metrics) == 5
+    # Confirm the test is changing the exact keys read by the function.
+    assert metrics["latest_q_cash"] > metrics["latest_q_debt"]
+
+    result = score_leverage(metrics)
+
+    assert result == 5
 
 
-def test_score_leverage_returns_three_when_equity_is_negative(monkeypatch):
-
-    financial_data = generate_financial_data(
-        cash=50.0,
-        debt=100.0,
-        equity=-20.0,
-    )
-
-    monkeypatch.setattr(
-        scoring_module,
-        "fetch_all_financial_data",
-        lambda ticker: financial_data,
-    )
-
+def test_score_leverage_returns_two_when_equity_is_negative():
     metrics = generate_target_metrics()
 
-    score = score_leverage(metrics)
+    metrics["latest_q_cash"] = 50.0
+    metrics["latest_q_debt"] = 100.0
+    metrics["latest_q_equity"] = -20.0
+    metrics["latest_q_leverage"] = None
 
-    assert score == 3
+    result = score_leverage(metrics)
+
+    assert result == 2
 
 
 def test_score_leverage_normal_case(monkeypatch):
